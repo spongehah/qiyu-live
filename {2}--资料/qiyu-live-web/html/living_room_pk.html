@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>直播间页面</title>
+    <link rel="stylesheet" href="../css/index.css">
+    <link rel="stylesheet" href="../css/common.css">
+    <link rel="stylesheet" href="../css/living_room_pk.css">
+    <!-- 引入ElementUI组件库 -->
+    <script src="../js/vue.js"></script>
+    <script src="../js/index.js"></script>
+</head>
+<!--<script src="https://cdn.jsdelivr.net/npm/svga.lite/svga.lite.min.js"></script>-->
+<script src="https://cdn.jsdelivr.net/npm/svgaplayerweb@2.0.7/build/svga.min.js"></script>
+<body class="main-content">
+
+<div id="app">
+
+    <div class="top-tab">
+        <div>
+            <span>
+            <img src="../img/livingroom.jpg" class="top-logo" alt="">
+            </span>
+            <span class="top-title" style="cursor: pointer;" onclick="window.location.href='./living_room_list.html'">
+                旗鱼直播
+            </span>
+            <span class="top-title top-title-link" onclick="window.location.href='./living_room_list.html'">
+                直播间
+            </span>
+            <span class="top-title top-title-link" onclick="window.location.href='./living_room_list.html'">
+                主播PK
+            </span>
+            <span>
+                <input type="search" class="top-search-input" placeholder="输入你想查找的东西">
+            </span>
+            <span class="top-title top-login" style="margin-top: 10px;">
+                <span v-show="initInfo.anchor==true">
+                    <button class="close_living_room_btn" @click="closeLivingRoomDialog = true">结束直播</button>
+                </span>
+                <el-dialog
+                        title="提示"
+                        :visible.sync="closeLivingRoomDialog"
+                        width="30%"
+                        >
+                  <span>真的要关闭直播间吗？</span>
+                  <span slot="footer" class="dialog-footer">
+                    <el-button @click="closeLivingRoomDialog = false">取 消</el-button>
+                    <el-button type="primary" @click="closeLivingRoom()">确 定</el-button>
+                  </span>
+                </el-dialog>
+                 <el-dialog
+                         title="提示"
+                         :visible.sync="livingRoomHasCloseDialog"
+                         width="30%"
+                 >
+                  <span>直播目前已结束</span>
+                  <span slot="footer" class="dialog-footer">
+                    <el-button type="primary" onclick="window.location.href='./living_room_list.html'">确 定</el-button>
+                  </span>
+                </el-dialog>
+                <span>
+                    <span class="living-room-top-tab-name">{{initInfo.watcherNickName}}</span>
+                    <img :src="initInfo.watcherAvatar" style="height: 30px;width: 30px;border-radius: 50%;" alt="">
+                </span>
+                <span style="position:relative;top: -12px;">
+                </span>
+            </span>
+
+        </div>
+    </div>
+    <el-row :gutter="20" style="margin-top: 200px;">
+        <el-col :span="4">&nbsp;
+        </el-col>
+        <el-col :span="11">
+            <div class="liveroom_top">
+                <div style="position: relative;top: -30px;">
+                    <div class="anchor_name">
+                        <div style="display: inline-block;">{{initInfo.anchorNickName}}</div>
+                        <img src="../img/living.jpg" class="anchor_label" alt="">
+                    </div>
+                    <img :src="initInfo.avatar" class="anchor_img" alt="">
+                </div>
+            </div>
+
+            <div id="svga-wrap" class="svga-wrap">
+            </div>    
+            <div  style="display: inline-block;text-align: center;width: 100%;background-color: black;">
+                <div style="height: 100px;"></div>
+                <span @click="choosePkUserAnchor()">
+                    <video :poster="anchorImg" width="48%" id="anchorVideo"  style="display: inline-block;
+                    border: rgba(255,165,0,0) 3px solid;"/>
+                </span>
+                <span @click="choosePkObjectAnchor()">
+                    <video :poster="pkObjImg" width="48%" id="subAnchorVideo"
+                           style="display: inline-block;
+                           border: rgba(255,165,0,0) 3px solid;"/>
+                </span>
+                <div style="height: 50px;"></div>
+                <div class="pk-bar">
+                        <div class="pk-detail-con">
+                            <div class="progress">
+                                <div class="progress-bar" id="pkBar" style="width: 50%;">
+                                    <i class="lightning"></i>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+            </div>
+            <div class="gift_content">
+                <div class="gift_content_title">礼物面板</div>
+                <div class="bank_tab" >
+                    <span @click="showBankInfoTab()">
+                        钱包余额:
+                    </span>
+                    <span style="color: white">{{currentBalance}}</span>
+                    <span style="margin-left: 30px;" @click="connectLiving()">
+                        连线
+                    </span>
+                </div>
+                <div class="gift_item" v-for="item in giftList">
+                    <img @click="sendGift(item.giftId)" :src="item.coverImgUrl" class="gift_img" alt="">
+                    <div class="gift_item_name">{{item.giftName}}</div>
+                    <div class="gift_item_price">{{item.price}}旗鱼币</div>
+                </div>
+            </div>
+        </el-col>
+        <div class="grey_bg" v-show="showBankInfo==true" @click="hiddenBankInfoTabNow()">
+        </div>
+        <div class="recharge_tab" v-show="showBankInfo==true">
+            <div style="height: 60px;">
+                <span><img src="../img/livingroom.jpg" alt="" style="width: 40px;height: 40px;position:relative; top: 15px;left: 10%;">
+                <span style="position: relative;left: 12%;top:5px;">在线充值</span>
+                <span style="position: relative;left: 50%;top:5px;">当前余额：<span style="color: #f37d08;"><b>{{currentBalance}}</b></span></span>
+                </span>
+            </div>
+            <div style="text-align: center;">
+                <span v-for="item in payProducts">
+                    <button class="recharge_btn" :id="item.id" @click="payProduct(item.id)">{{item.name}}<br>
+                        <span class="coin_um">{{item.coinNum}}旗鱼币</span>
+                    </button>
+                </span>
+            </div>
+            <div style="height: 50px;" v-show="qrCode==''"></div>
+            <div style="height: 250px;" v-show="qrCode!=''">
+                <div style="text-align: center;">
+                    <img src="../img/qr-code.png" style="height: 180px;width: 180px;" alt="">
+                    <div style="font-size: 13px;color: #a4a4a4">
+                        请使用 <img style="display: inline-block;width: 13px;height: 13px;position:relative;top: 1px;" src="../img/zfb.jpg"> 支付宝/
+                        <img style="display: inline-block;width: 13px;height: 13px;position:relative;top: 1px;" src="../img/wx.jpg"> 微信 扫码支付 
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="grey_bg" v-show="showGiftRank==true" @click="hiddenGiftRankNow()">
+            <!-- 送礼榜单模块-->
+            <div class="gift_rank_div">
+                <div style="margin-top: 30px;margin-bottom: 30px;">
+                    <div class="gift_rank_title"><b>送礼榜单</b></div>
+                    <el-row :gutter="24">
+                        <el-col :span="24" v-for="item in rankList">
+                            <div style="background-color: #F9EFEF;width: 90%;position:relative;left: 5%;padding-top: 6px;">
+                                <span class="gift_rank_index">{{item.index}}</span>
+                                <img :src="item.avatar" class="gift_rank_avatar">
+                                <span class="gift_rank_nickname">{{item.nickname}}</span>
+                            </div>
+                            <span class="gift_rank_value"><b>{{item.score}}</b></span>
+                        </el-col>
+                    </el-row>
+                </div>
+            </div>
+        </div>
+        <el-col :span="5">
+            <div class="talk-content-box" id="talk-content-box">
+                <div style="margin-left: 20px;margin-top: 20px;" v-for='chatItem in chatList'>
+                    <div v-show="chatItem.msgType==5">
+                        <div class="gift_msg">
+                            {{chatItem.msg}}
+                        </div>
+                    </div>
+                    <div v-show="chatItem.msgType==1">
+                        <div class="user-name">{{chatItem.msg.senderName}}</div>
+                        <img :src="chatItem.msg.senderImg" class="chat-avatar">
+                    </div>
+                    <div class="chat-content" v-show="chatItem.msgType==1">
+                        {{chatItem.msg.content}}
+                    </div>
+                </div>
+            </div>
+            <div>
+                <br>
+                <el-form ref="form" @submit.native.prevent>
+                    <el-form-item>
+                        <el-input v-model="form.review" @keyup.enter.native="sendReview" placeholder="发送直播评论"></el-input>
+                    </el-form-item>
+                    <el-form-item style="text-align:right;">
+                        <el-button type="primary" @click="sendReview">发送消息</el-button>
+                    </el-form-item>
+                </el-form>
+            </div>
+
+        </el-col>
+    </el-row>
+</div>
+<script src="../js/axios.min.js"></script>
+<script src="../js/constants.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/living_room_pk.js"></script>
+
+
+</body>
+</html>

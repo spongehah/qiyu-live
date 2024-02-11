@@ -1,0 +1,30 @@
+version: '3'
+services:
+  qiyu-live-api-docker-1:
+    container_name: qiyu-live-api-docker-1
+    image: 'qiyu-live-api-docker:1.0.4'
+    ports:
+      - "8081:8081"
+    volumes:
+      - /tmp/logs/qiyu-live-api:/tmp/logs/qiyu-live-api
+    environment:
+      - spring.cloud.nacos.discovery.ip=192.168.111.100   # 和user-provider中的dubbo_ip对应相等，不配置引入网关将无法访问
+      - TZ=Asia/Shanghai
+      - server.port=8081
+      - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'nacos.server:192.168.111.1'
+  qiyu-live-api-docker-2:
+    container_name: qiyu-live-api-docker-2
+    image: 'qiyu-live-api-docker:1.0.4'
+    ports:
+      - "8082:8082"
+    volumes:
+      - /tmp/logs/qiyu-live-api:/tmp/logs/qiyu-live-api
+    environment:
+      - spring.cloud.nacos.discovery.ip=192.168.111.100   # 和user-provider中的dubbo_ip对应相等
+      - TZ=Asia/Shanghai
+      - server.port=8082
+      - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'nacos.server:192.168.111.1'

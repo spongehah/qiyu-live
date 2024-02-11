@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: qiyu-live-im-core-server
+  cloud:
+    nacos:
+      discovery:
+        ip: [写im-core-server的机器ip]
+  data:
+    redis:
+      port: 8801
+      host: cloud.db
+      password: qiyu
+      lettuce:
+        pool:
+          min-idle: 10
+          max-active: 100
+          max-idle: 10
+qiyu:
+  im:
+    tcp:
+      port: 8085
+    ws:
+      port: 8086
+
+  rmq:
+    producer:
+      nameSrv: qiyu.rmq.com:9876
+      groupName: ${spring.application.name}
+      applicationName: ${spring.application.name}
+      sendMsgTimeout: 3000
+      retryTimes: 2
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+    qos-enable: false
+  registry:
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=qiyu&&password=qiyu
+  protocol:
+    port: 9099

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.idea</groupId>
+    <artifactId>qiyu-live-app</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <packaging>pom</packaging>
+    <modules>
+        <module>qiyu-live-user-interface</module>
+        <module>qiyu-live-user-provider</module>
+        <module>qiyu-live-api</module>
+        <module>qiyu-live-common-interface</module>
+        <module>qiyu-live-framework</module>
+        <module>qiyu-live-id-generate-interface</module>
+        <module>qiyu-live-id-generate-provider</module>
+        <module>qiyu-live-gateway</module>
+        <module>qiyu-live-msg-interface</module>
+        <module>qiyu-live-msg-provider</module>
+        <module>qiyu-live-account-provider</module>
+        <module>qiyu-live-account-interface</module>
+        <module>qiyu-live-im-core-server</module>
+        <module>qiyu-live-im-interface</module>
+        <module>qiyu-live-im-interface</module>
+        <module>qiyu-live-im-provider</module>
+        <module>qiyu-live-im-router-provider</module>
+        <module>qiyu-live-im-router-interface</module>
+        <module>qiyu-live-im-core-server-interfaces</module>
+        <module>qiyu-live-living-provider</module>
+        <module>qiyu-live-living-interface</module>
+        <module>qiyu-live-gift-provider</module>
+        <module>qiyu-live-gift-interface</module>
+        <module>qiyu-live-bank-provider</module>
+        <module>qiyu-live-bank-interface</module>
+        <module>qiyu-live-bank-api</module>
+    </modules>
+
+    <properties>
+        <qiyu-mysql.version>8.0.28</qiyu-mysql.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <springboot.version>3.0.4</springboot.version>
+        <dubbo.version>3.2.0-beta.3</dubbo.version>
+        <docker.registry.address>registry.baidubce.com</docker.registry.address>
+        <docker.registry.namespace>qiyu-live-test</docker.registry.namespace>
+        <spring-cloud-boostrap.version>3.0.2</spring-cloud-boostrap.version>
+        <arthus.zip.address>/Users/linhao/env/arthus/</arthus.zip.address>
+    </properties>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.0.4</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2022.0.0.0-RC1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+
+</project>

@@ -1,0 +1,20 @@
+spring:
+  cloud:
+    nacos:
+      username: ${NACOS_USER}
+      password: ${NACOS_PWD}
+      discovery:
+        server-addr: qiyu.nacos.com:8848
+        namespace: qiyu-live-test
+      config:
+        import-check:
+          enabled: false
+        # 当前服务启动后去nacos中读取配置文件的后缀
+        file-extension: yaml
+        # 读取配置的nacos地址
+        server-addr: qiyu.nacos.com:8848
+        # 读取配置的nacos的名空间
+        namespace: qiyu-live-test
+  config:
+    import:
+      - optional:nacos:qiyu-live-api.yaml

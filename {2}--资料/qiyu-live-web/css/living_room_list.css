@@ -1,0 +1,87 @@
+.living_room_cover {
+    border-radius: 5px;
+    border: solid 3px rgba(38, 38, 38, 0);
+    /*margin: auto;*/
+    margin-right: 20px;
+    text-align: center;
+    width: 250px;
+    height: 250px;
+}
+
+.living_room_item {
+    margin-right: 20px;
+}
+
+
+.living_room_cover:hover {
+    border: solid 3px rgba(216, 216, 216, 0.86);
+}
+
+.living_room_tab {
+    margin-left: -49px;
+    z-index: 9;
+    position: relative;
+    left: 52px;
+    top: -46px;
+    color: #666;
+    width: 240px;
+    height: 40px;
+    background-color: white;
+    padding-top: 10px;
+    padding-left: 10px;
+    font-size: 13px;
+}
+.living_room_head{
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    position: relative;
+    left: 5px;
+}
+.living_room_name{
+    position: relative;
+    top: -38px;
+    left: 45px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -o-text-overflow: ellipsis;
+    white-space:nowrap;
+    display: block;
+    width: 150px;
+}
+
+.online_count{
+    margin-left: 15px;
+    position: relative;
+    top: -35px;
+    left: 30px;
+    color: #7baaca;
+}
+
+.good_count{
+    color: orange;
+    margin-left: 10px;
+    position: relative;
+    top: -35px;
+    left: 29px;
+}
+
+.start_living_room_btn {
+    position:relative;
+    top: -12px;
+    left: -20px;
+    border: solid 0px;
+    padding: 10px;
+    background-color: orange;
+    color: white;
+}
+
+/*.living_room_cover_des {*/
+/*    background-color: white;*/
+/*    height: 40px;*/
+/*    width: 252px;*/
+/*    color: #666;*/
+/*    padding-left: 20px;*/
+/*    padding-top: 15px;*/
+/*    font-size: 14px;*/
+/*}*/

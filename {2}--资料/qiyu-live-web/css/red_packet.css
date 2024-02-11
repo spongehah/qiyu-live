@@ -1,0 +1,89 @@
+.red-packet-wrap {
+  padding: 0;
+  margin: 0; 
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  z-index: 9999;
+}
+
+/*
+animation  各参数意思
+关键帧动画名称
+动画执行时间
+动画延迟时间
+动画执行次数
+动画的执行速度函数
+动画执行方向  alternate  间隔的顺序 ( 0 到 100 到 0 到 100 )
+             reverse    反向运动   (100 到 0 )
+             reverse-alternate   反向间隔运动
+动画执行模式  forwards(动画停止在最后一个关键帧的位置)
+             backwards (动画第一个关键帧立即执行)
+             both(两者都 即立即作用第一个关键帧也停止在最后一个关键帧)
+*/
+#wrapper img {
+    position: absolute;
+    transform: translateY(-120%);
+    /*下落动画*/
+    animation: dropDowm 3s forwards;
+    /*旋转动画*/
+    z-index: 9999;
+    top: -100px;
+}
+
+@keyframes dropDowm {
+    0% {
+        top: 0px;
+        transform: translateY(-100%) rotate(0deg);
+    }
+
+    100% {
+        top: 110%;
+        transform: translateY(0%) rotate(360deg);
+    }
+}
+
+#modol {
+    display: none;
+}
+
+#modol::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+#hb {
+    width: 350px;
+    height: 450px;
+    border-radius: 20px;
+    background-color: #e7223e;
+    color: #fad755;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    margin-top: -225px;
+    margin-left: -175px;
+    font-size: 30px;
+    font-weight: 900;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+#btn {
+    background-color: #fad755;
+    color: #e7223e;
+    font-size: 18px;
+    margin-top: 10px;
+    padding: 10px;
+    border: none;
+    outline: none;
+    cursor: pointer;
+}

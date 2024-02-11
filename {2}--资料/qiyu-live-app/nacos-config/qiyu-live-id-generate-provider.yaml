@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: qiyu-live-id-generate-provider
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    #访问主库
+    url: jdbc:mysql://cloud.db:8808/qiyu_live_common?useUnicode=true&characterEncoding=utf8
+    username: qiyu
+    password: qiyu
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+  registry:
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=qiyu&&password=qiyu
+  protocol:
+    name: dubbo
+    port: 9092

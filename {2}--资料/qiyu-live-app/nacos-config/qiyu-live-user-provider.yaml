@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: qiyu-live-user-provider
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:nacos:qiyu.nacos.com:8848:qiyu-live-user-shardingjdbc.yaml?username=qiyu&&password=qiyu&&namespace=qiyu-live-test
+    hikari:
+      pool-name: qiyu-user-pool
+      minimum-idle: 100
+      maximum-pool-size: 300
+      idle-timeout: 60000
+      connection-timeout: 4000
+      max-lifetime: 60000
+  data:
+    redis:
+      port: 8801
+      host: cloud.db
+      password: qiyu
+      lettuce:
+        pool:
+          min-idle: 10
+          max-active: 100
+          max-idle: 10
+qiyu:
+  rmq:
+    consumer:
+      nameSrv: qiyu.rmq.com:9876
+      groupName: qiyuLiveMqApplication
+    producer:
+      nameSrv: qiyu.rmq.com:9876
+      groupName: ${spring.application.name}
+      applicationName: ${spring.application.name}
+      sendMsgTimeout: 3000
+      retryTimes: 2
+
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+  registry:
+    #docker启动的时候，注入host的配置
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=qiyu&&password=qiyu
+  protocol:
+    name: dubbo
+    port: 9090
+    threadpool: fixed
+    dispatcher: execution
+    threads: 500
+    accepts: 500

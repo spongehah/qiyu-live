@@ -1,0 +1,29 @@
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: qiyu-live-api
+          uri: lb://qiyu-live-api
+          predicates:
+            - Path=/live/api/**
+
+dubbo:
+  application:
+    name: qiyu-live-gateway
+    qos-enable: false
+  registry:
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=nacos&&password=nacos
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    reactor.netty.http.client: INFO
+
+qiyu:
+  gateway:
+    notCheckUrlList:
+      - /live/api/userLogin/
+      - /live/api/living/list/

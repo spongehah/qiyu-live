@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: qiyu-live-bank-api
+dubbo:
+  application:
+    name: qiyu-live-bank-api
+    qos-enable: false
+  registry:
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=qiyu&&password=qiyu
+
+server:
+  port: 8201
+  servlet:
+    context-path: /live/bank

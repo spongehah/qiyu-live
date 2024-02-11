@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.0.4</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-app</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0-SNAPSHOT</version>
+    <modules>
+        <module>qiyu-live-user-interface</module>
+        <module>qiyu-live-user-provider</module>
+        <module>qiyu-live-api</module>
+        <module>qiyu-live-common-interface</module>
+        <module>qiyu-live-framework</module>
+        <module>qiyu-live-gateway</module>
+        <module>qiyu-live-msg-provider</module>
+        <module>qiyu-live-msg-interface</module>
+        <module>qiyu-live-account-provider</module>
+        <module>qiyu-live-account-interface</module>
+    </modules>
+
+    <properties>
+        <qiyu-mysql.version>8.0.29</qiyu-mysql.version>
+        <springboot.version>3.0.4</springboot.version>
+        <curator.version>2.12.0</curator.version>
+        <mybatis-plus.version>3.5.3</mybatis-plus.version>
+        <druid.version>1.1.20</druid.version>
+        <sharding.jdbc.version>5.3.2</sharding.jdbc.version>
+        <hessian.version>4.0.38</hessian.version>
+        <jetty.version>9.4.28.v20200408</jetty.version>
+        <dubbo.version>3.2.0-beta.3</dubbo.version>
+        <spring-cloud-alibaba.version>2022.0.0.0-RC1</spring-cloud-alibaba.version>
+        <spring-cloud-starter-gateway.version>4.0.6</spring-cloud-starter-gateway.version>
+        <spring-cloud-starter-loadbalancer.version>4.0.3</spring-cloud-starter-loadbalancer.version>
+        <spring-cloud-starter-bootstrap.version>3.0.2</spring-cloud-starter-bootstrap.version>
+        <alibaba-fastjson.version>2.0.10</alibaba-fastjson.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <arthus.zip.address>D:\浏览器下载\</arthus.zip.address>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

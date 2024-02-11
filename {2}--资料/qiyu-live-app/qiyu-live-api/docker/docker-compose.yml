@@ -1,0 +1,30 @@
+version: '3'
+services:
+  qiyu-live-api-docker-1:
+    container_name: qiyu-live-api-docker-1
+    image: 'registry.baidubce.com/qiyu-live-test/qiyu-live-api-docker:1.0.4'
+    ports:
+      - "8081:8081"
+    volumes:
+      - /tmp/logs/qiyu-live-api:/tmp/logs/qiyu-live-api
+    environment:
+      - spring.cloud.nacos.discovery.ip=192.168.1.7
+      - TZ=Asia/Shanghai
+      - server.port=8081
+      - JAVA_OPTS=-DNACOS_USER=qiyu -DNACOS_PWD=qiyu -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'qiyu.nacos.com:192.168.1.7'
+  qiyu-live-api-docker-2:
+    container_name: qiyu-live-api-docker-2
+    image: 'registry.baidubce.com/qiyu-live-test/qiyu-live-api-docker:1.0.4'
+    ports:
+      - "8082:8082"
+    volumes:
+      - /tmp/logs/qiyu-live-api:/tmp/logs/qiyu-live-api
+    environment:
+      - spring.cloud.nacos.discovery.ip=192.168.1.7
+      - TZ=Asia/Shanghai
+      - server.port=8082
+      - JAVA_OPTS=-DNACOS_USER=qiyu -DNACOS_PWD=qiyu -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'qiyu.nacos.com:192.168.1.7'

@@ -1,0 +1,26 @@
+server:
+  port: 8088
+spring:
+  application:
+    name: qiyu-live-gateway
+  cloud:
+    nacos:
+      username: qiyu
+      password: qiyu
+      discovery:
+        server-addr: nacos.server:8848
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+      config:
+        import-check:
+          enabled: false
+        file-extension: yaml
+        server-addr: nacos.server:8848
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+  config:
+    import:
+      - optional:nacos:${spring.application.name}.yml
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty.http.client: DEBUG

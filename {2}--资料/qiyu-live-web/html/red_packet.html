@@ -1,0 +1,198 @@
+<html>
+<head></head>
+<style>
+    * {
+        padding: 0;
+        margin: 0;
+    }
+
+    body {
+        /* background-color: white; */
+        overflow: hidden;
+    }
+
+    /*
+    animation  各参数意思
+    关键帧动画名称
+    动画执行时间
+    动画延迟时间
+    动画执行次数
+    动画的执行速度函数
+    动画执行方向  alternate  间隔的顺序 ( 0 到 100 到 0 到 100 )
+                 reverse    反向运动   (100 到 0 )
+                 reverse-alternate   反向间隔运动
+    动画执行模式  forwards(动画停止在最后一个关键帧的位置)
+                 backwards (动画第一个关键帧立即执行)
+                 both(两者都 即立即作用第一个关键帧也停止在最后一个关键帧)
+*/
+    #wrapper img {
+        position: absolute;
+        transform: translateY(-100%);
+        /*下落动画*/
+        animation: dropDowm 3s forwards;
+        /*旋转动画*/
+    }
+
+    @keyframes dropDowm {
+        0% {
+            top: 0px;
+            transform: translateY(-100%) rotate(0deg);
+        }
+
+        100% {
+            top: 110%;
+            transform: translateY(0%) rotate(360deg);
+        }
+    }
+
+    #modol {
+        display: none;
+    }
+
+    #modol::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    #hb {
+        width: 350px;
+        height: 450px;
+        border-radius: 20px;
+        background-color: #e7223e;
+        color: #fad755;
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        margin-top: -225px;
+        margin-left: -175px;
+        font-size: 30px;
+        font-weight: 900;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #btn {
+        background-color: #fad755;
+        color: #e7223e;
+        font-size: 18px;
+        margin-top: 10px;
+        padding: 10px;
+        border: none;
+        outline: none;
+        cursor: pointer;
+    }
+</style>
+<body>
+    <div id="wrapper" >
+        <img  src="../img/petal.jpg" style="width: 140px;">
+    </div>
+    <div id="modol">
+        <div id="hb">
+            <div id="text"></div>
+            <div id="btn">继续抢红包</div>
+        </div>
+    </div>
+</body>
+
+<script>
+    function init() {
+        var dom = createDom(40);
+        var wrapper = document.getElementById('wrapper');
+        wrapper.appendChild(dom);
+        bindEvent();
+    }
+
+    var totalMoney = 0;   //保存所有抢到的红包总金额
+    var delayTime = 0;
+    var lastImg = null;   //最后一张掉落的图片
+
+    //创建红包结构, num代表红包个数
+    function createDom(num) {
+        var frag = document.createDocumentFragment();  //创建文档碎片
+        for (var i = 0; i < num; i++) {
+            var img = new Image();
+            img.src = '../img/petal.jpg';
+            img.style.width = 140 +'px';
+            img.style.left = ranNum(0, window.innerWidth) + 'px';      //让红包散列分布
+            var delay = ranNum(0, 100) / 10;
+            img.style.animationDelay = delay + 's';                   //设置红包出现时间
+            if (delayTime < delay) {
+                delayTime = delay;
+                lastImg = img;
+            }
+            //data-money
+            img.dataset.money = ranNum(0, 1000) / 100;     //设置每个红包的钱数
+            frag.appendChild(img);
+        }
+        return frag;
+    }
+
+    //绑定点击事件
+    function bindEvent() {
+        var wrapper = document.getElementById('wrapper'),
+            imgList = document.getElementsByTagName('img'),
+            modol = document.getElementById('modol'),
+            text = document.getElementById('text'),
+            btn = document.getElementById('btn');   
+        
+        //点击领取红包
+        addEvent(wrapper, 'mousedown', function (e) {
+            var event = e || window.event,
+                target = event.target || event.srcElement,
+                money = event.target.dataset.money;
+            if (money) {
+                text.innerText = '恭喜抢到红包' + money + '元';
+                for (var i = 0, len = imgList.length; i < len; i++) {
+                    imgList[i].style.animationPlayState = 'paused';
+                }
+                modol.style.display = 'block';
+                totalMoney += Number(money);
+            }
+        });    
+        //点击继续抢红包按钮事件
+        addEvent(btn, 'click', function () {
+            modol.style.display = 'none';
+            for (var i = 0, len = imgList.length; i < len; i++) {
+                imgList[i].style.animationPlayState = 'running';
+            }
+        });
+        //当所有红包都下完了之后
+        addEvent(lastImg, 'webkitAnimationEnd', function () {
+            modol.style.display = 'block';
+            text.innerText = '恭喜总共抢到了' + totalMoney.toFixed(2) + '元';
+            btn.style.display = 'none';
+        });
+    }
+
+    //min 到 max 之间的随机数
+    function ranNum(min, max) {
+        return Math.ceil(Math.random() * (max - min) + min);
+    }
+
+    //兼容的 添加事件函数
+    function addEvent(elem, type, handle) {
+        if (elem.addEventListener) {
+            elem.addEventListener(type, handle, false);
+        } else if (elem.attachEvent) {
+            elem.attachEvent('on' + type, function () {
+                handle.call(elem);
+            })
+        } else {
+            elem['on' + type] = handle;
+        }
+    }
+
+
+
+
+    init();
+</script>
+
+</html>

@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: qiyu-live-api
+  data:
+    redis:
+      port: 8801
+      host: cloud.db
+      password: root
+      lettuce:
+        pool:
+          min-idle: 10
+          max-active: 100
+          max-idle: 10
+dubbo:
+  application:
+    name: qiyu-live-api
+    qos-enable: false
+  registry:
+    address: nacos://qiyu.nacos.com:8848?namespace=qiyu-live-test&&username=nacos&&password=nacos
+
+server:
+  port: 8100
+  servlet:
+    context-path: /live/api
+  tomcat:
+    uri-encoding: UTF-8
+    max-threads: 500 #最大工作线程数量
+    min-spare-threads: 20 #最小工作线程数量
+    max-connections: 500 #一瞬间最大支持的并发的连接数
+qiyu:
+  rmq:
+    producer:
+      nameSrv: qiyu.rmq.com:9876
+      groupName: ${spring.application.name}
+      applicationName: ${spring.application.name}
+      sendMsgTimeout: 3000
+      retryTimes: 2

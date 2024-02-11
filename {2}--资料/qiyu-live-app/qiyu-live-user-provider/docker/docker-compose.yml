@@ -1,0 +1,37 @@
+version: '3'
+services:
+  qiyu-live-user-provider-docker-1:
+    container_name: qiyu-live-user-provider-docker-1
+    image: 'registry.baidubce.com/qiyu-live-test/qiyu-live-user-provider-docker:1.0.5'
+    ports:
+      - "9091:9091"
+    volumes:
+      - /tmp/logs/qiyu-live-user-provider:/tmp/logs/qiyu-live-user-provider
+    environment:
+      - TZ=Asia/Shanghai
+      - DUBBO_IP_TO_REGISTRY=192.168.1.7
+      - DUBBO_PORT_TO_REGISTRY=9091
+      - DUBBO_PORT_TO_BIND=9091
+      - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'qiyu.nacos.com:192.168.1.7'
+      - 'cloud.db:192.168.1.7'
+      - 'qiyu.rmq.com:192.168.1.7'
+
+  qiyu-live-user-provider-docker-2:
+    container_name: qiyu-live-user-provider-docker-2
+    image: 'registry.baidubce.com/qiyu-live-test/qiyu-live-user-provider-docker:1.0.5'
+    ports:
+      - "9092:9092"
+    volumes:
+      - /tmp/logs/qiyu-live-user-provider:/tmp/logs/qiyu-live-user-provider
+    environment:
+      - TZ=Asia/Shanghai
+      - DUBBO_IP_TO_REGISTRY=192.168.1.7
+      - DUBBO_PORT_TO_REGISTRY=9092
+      - DUBBO_PORT_TO_BIND=9092
+      - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'qiyu.nacos.com:192.168.1.7'
+      - 'cloud.db:192.168.1.7'
+      - 'qiyu.rmq.com:192.168.1.7'

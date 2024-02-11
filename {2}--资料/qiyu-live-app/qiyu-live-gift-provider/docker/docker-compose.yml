@@ -1,0 +1,18 @@
+version: '3'
+services:
+  qiyu-live-gift-provider-1:
+    container_name: qiyu-live-gift-provider-1
+    image: 'registry.baidubce.com/qiyu-live-test/qiyu-live-gift-provider-docker:1.0.1'
+    ports:
+      - "9098:9090"
+    volumes:
+      - /tmp/logs/qiyu-live-gift-provider:/tmp/logs/qiyu-live-gift-provider
+    environment:
+      - DUBBO_IP_TO_REGISTRY=106.55.106.248
+      - DUBBO_PORT_TO_REGISTRY=9098
+      - TZ=Asia/Shanghai
+      - JAVA_OPTS=-DNACOS_USER=qiyu_rw -DNACOS_PWD=qiyu1867122 -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
+    extra_hosts:
+      - 'qiyu.nacos.com:175.178.130.183'
+      - 'cloud.db:175.178.130.183'
+      - 'qiyu.rmq.com:119.29.239.77'
