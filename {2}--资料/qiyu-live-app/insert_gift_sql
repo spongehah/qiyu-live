@@ -1,9 +1,0 @@
-INSERT INTO `t_gift_config` (`price`, `gift_name`, `status`, `cover_img_url`, `svga_url`, `create_time`, `update_time`)
-VALUES
-	(90, '天使少女-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4Dumn.png', 'https://files.catbox.moe/gn58do.svga', '2023-08-01 06:50:25', '2023-09-18 15:08:14'),
-	(20, '皇冠-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4DKwq.png', 'https://files.catbox.moe/6qgizz.svga', '2023-08-01 06:50:25', '2023-09-18 15:06:49'),
-	(10, '爱心气泡-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4Deyj.png', 'https://files.catbox.moe/hoy34c.svga', '2023-08-01 06:50:25', '2023-09-18 15:07:06'),
-	(500, '保时捷-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4DmOs.png', 'https://files.catbox.moe/2kigvc.svga', '2023-08-01 06:50:25', '2023-09-18 15:07:57'),
-	(20, '神灯仙女-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4DZlQ.png', 'https://files.catbox.moe/iswu71.svga', '2023-08-01 06:50:25', '2023-09-18 15:07:41'),
-	(45, '飞天火箭-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4DMT0.jpg', 'https://files.catbox.moe/nt5oct.svga', '2023-08-01 06:50:25', '2023-09-18 15:08:30'),
-	(45, '万圣节-2', 1, 'https://z1.ax1x.com/2023/09/18/pP4DlkV.png', 'https://files.catbox.moe/y4fkos.svga', '2023-08-01 06:50:25', '2023-09-18 15:08:58');
