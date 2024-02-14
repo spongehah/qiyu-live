@@ -77,12 +77,14 @@ public class UserLoginServiceImpl implements IUserLoginService {
         // https://api.qiyu.live.com//
         // 取公共部分的顶级域名，如果在hosts中自定义域名有跨域限制无法解决的话就注释掉setDomain和setPath
         // cookie.setDomain("qiyu.live.com");
+        // 这里我们不设置域名，就设置为localhost
+        cookie.setDomain("localhost");
         // 域名下的所有路径
-        // cookie.setPath("/");
+        cookie.setPath("/");
         // 设置cookie过期时间，单位为秒，设置为token的过期时间，30天
         cookie.setMaxAge(30 * 24 * 3600);
         // 加上它，不然浏览器不会记录cookie
-        response.setHeader("Access-Control-Allow-Credentials", "true");
+        // response.setHeader("Access-Control-Allow-Credentials", "true");
         response.addCookie(cookie);
         return WebResponseVO.success(BeanUtil.copyProperties(userLoginDTO, UserLoginVO.class));
     }

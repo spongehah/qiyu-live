@@ -220,6 +220,7 @@ pom：
         <spring-cloud-starter-loadbalancer.version>4.0.3</spring-cloud-starter-loadbalancer.version>
         <spring-cloud-starter-bootstrap.version>3.0.2</spring-cloud-starter-bootstrap.version>
         <alibaba-fastjson.version>2.0.10</alibaba-fastjson.version>
+        <netty-all.version>4.1.18.Final</netty-all.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
@@ -1906,11 +1907,15 @@ public Map<Long, UserDTO> batchQueryUserInfo(String userIdStr) {
 }
 ```
 
-### 3 使用Canal实现延迟双删/现在是kafka加delayqueue
+### 3 Kafka加DelayQueue实现延迟双删
 
-```
-docker run -p 11111:11111 --name canal \
-> -e canal.destinations=qiyu \
+> 计划换成Canal订阅MySQL binlog进行延迟双删，或者使用RocketMQ的延迟消息进行延迟双删，但是由于我的MQ目前只学习了Kafka，所以目前只能用Kafka+DelayQueue的方式进行一个异步加延迟的实现
+>
+> docker运行canal：
+>
+> ```shell
+> docker run -p 11111:11111 --name canal \
+> > -e canal.destinations=qiyu \
 > -e canal.instance.master.address=mysql:8808  \
 > -e canal.instance.dbUsername=canal  \
 > -e canal.instance.dbPassword=canal  \
@@ -1920,7 +1925,7 @@ docker run -p 11111:11111 --name canal \
 > -e canal.instance.filter.regex=qiyu_live_user\\..* \
 > --network canal-network \
 > -d canal/canal-server:v1.1.5
-```
+> ```
 
 **子模块user-provider：**
 
@@ -4019,13 +4024,28 @@ Docker的cpu和内存没有设置上限，关闭掉机器上的多余进程
 
 **打开资料中的user-provider-test.jmx**（JMeter需要自己上网查询安装JMeter Dubbo测试插件），设置好参数，启动进行测试
 
-## 3.13 登录注册功能
+## 3.13 登录注册功能完善
 
 ### 1 发送短信模块
 
 我们使用的是容联云平台的短信服务，具有免费额度，也可以选择阿里云也有免费额度
 
 容联云：https://www.yuntongxun.com/
+
+创建数据表：
+
+创建数据库qiyu_live_msg，在其中创建表：
+
+```sql
+CREATE TABLE `t_sms`  (
+  `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键id',
+  `code` int UNSIGNED NULL DEFAULT 0 COMMENT '验证码',
+  `phone` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '' COMMENT '手机号',
+  `sendTime` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发送时间',
+  `updateTime` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+```
 
 **新建子模块qiyu-live-msg-interface：**
 
@@ -4765,7 +4785,7 @@ DELIMITER ;
           algorithm-expression: t_user_phone_${(user_id % 100).toString().padLeft(2,'0')}
 ```
 
-### 3 新建token模块
+### 3 新建服务鉴权token模块
 
 因为token的校验访问频率很高，所以单独抽出一个模块，放到user-provider中也可以
 
@@ -5029,9 +5049,12 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 public class AccountProviderApplication implements CommandLineRunner {
 
     public static void main(String[] args) {
+        //若Dubbo服务会自动关闭，加上CountDownLatch
+        CountDownLatch countDownLatch = new CountDownLatch(1);
         SpringApplication springApplication = new SpringApplication(AccountProviderApplication.class);
         springApplication.setWebApplicationType(WebApplicationType.NONE);
         springApplication.run(args);
+        countDownLatch.await();
     }
 
     @Resource
@@ -5828,8 +5851,10 @@ public class UserLoginServiceImpl implements IUserLoginService {
         // https://api.qiyu.live.com//
         // 取公共部分的顶级域名，如果在hosts中自定义域名有跨域限制无法解决的话就注释掉setDomain和setPath
         // cookie.setDomain("qiyu.live.com");
+        // 这里我们不设置域名，就设置为localhost
+        cookie.setDomain("localhost");
         // 域名下的所有路径
-        // cookie.setPath("/");
+        cookie.setPath("/");
         // 设置cookie过期时间，单位为秒，设置为token的过期时间，30天
         cookie.setMaxAge(30 * 24 * 3600);
         // 加上它，不然浏览器不会记录cookie
@@ -5991,6 +6016,19 @@ public class AccountCheckFilter implements GlobalFilter, Ordered {
         // 获取请求url，判断是否为空，如果为空则返回请求不通过
         ServerHttpRequest request = exchange.getRequest();
         String reqUrl = request.getURI().getPath();
+        
+        // 允许跨域请求（设置了这里得删除其它两处跨域处理）
+        ServerHttpResponse response = exchange.getResponse();
+        HttpHeaders headers = response.getHeaders();
+        // headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://web.qiyu.live.com:5500");
+        // 这里我们不设置域名，就设置为localhost
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5500");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, "POST, GET");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "*");
+        headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, ALL);
+        headers.add(HttpHeaders.ACCESS_CONTROL_MAX_AGE, MAX_AGE);
+        
         if (StringUtils.isEmpty(reqUrl)) {
             return Mono.empty();
         }
@@ -6036,6 +6074,17 @@ public class AccountCheckFilter implements GlobalFilter, Ordered {
 }
 ```
 
+> 在上面我们配置了跨域处理，我们要删除api中的两处跨域处理：
+>
+> 1 删除qiyu-live-api的UserLoginServiceImpl的login()方法中的下列语句：
+>
+> ```java
+> // 加上它，不然浏览器不会记录cookie
+> response.setHeader("Access-Control-Allow-Credentials", "true");
+> ```
+>
+> 2 删除qiyu-live-api中的config.CorsConfig.java
+
 nacos中的qiyu-live-gateway.yaml：
 
 ```yaml
@@ -6064,16 +6113,220 @@ qiyu:
       - /live/api/userLogin/
 ```
 
+### 7 将userId传递给下游服务
+
+如果我们在每个请求进来时，都手动获取网关传下来的header中的userId，那么会多很多冗余代码，所以我们可以将获取userId的操作放到下游每个服务的过滤器interceptor中去
+
+但是每个服务都写一个相同的interceptor也会冗余，所以我们将其抽取为一个starter
+
+**新建子子模块qiyu-live-framework-web-starter：**
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <exclusions>
+            <exclusion>
+                <artifactId>log4j-to-slf4j</artifactId>
+                <groupId>org.apache.logging.log4j</groupId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+
+    <!--自定义-->
+    <dependency>
+        <groupId>org.hah</groupId>
+        <artifactId>qiyu-live-common-interface</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>org.hah</groupId>
+        <artifactId>qiyu-live-framework-redis-starter</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+    
+</dependencies>
+```
+
+```java
+package org.qiyu.live.web.starter.context;
+
+import org.qiyu.live.web.starter.constants.RequestConstants;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 用户请求上下文环境
+ */
+public class QiyuRequestContext {
+    
+    private static final ThreadLocal<Map<Object, Object>> resources = new InheritableThreadLocalMap<>();
+    
+    public static void set(Object key, Object value) {
+        if(key == null) {
+            throw new IllegalArgumentException("key can not be null!");
+        }
+        if(value == null) {
+            resources.get().remove(key);
+        }
+        resources.get().put(key, value);
+    }
+    
+    public static Long getUserId() {
+        Object userId = get(RequestConstants.QIYU_USER_ID);
+        return userId == null ? null : (Long) userId;
+    }
+    
+    public static Object get(Object key) {
+        if (key == null) {
+            throw new IllegalArgumentException("key can not be null!");
+        }
+        return resources.get().get(key);
+    }
+
+    //设计一个clear方法，防止内存泄漏，springboot-web容器处理请求，tomcat，工作线程会去处理我们的业务请求，工作线程是会长时间存在的，
+    public static void clear() {
+        resources.remove();
+    }
+
+    //实现父子线程之间的线程本地变量传递，方便我们后序的异步操作
+    //A-->threadLocal ("userId",1001)
+    //A-->new Thread(B)-->B线程属于A线程的子线程，threadLocal get("userId")
+    private static final class InheritableThreadLocalMap<T extends Map<Object, Object>> extends InheritableThreadLocal<Map<Object, Object>> {
+
+        @Override
+        protected Map<Object, Object> initialValue() {
+            return new HashMap();
+        }
+
+        @Override
+        protected Map<Object, Object> childValue(Map<Object, Object> parentValue) {
+            if (parentValue != null) {
+                return (Map<Object, Object>) ((HashMap<Object, Object>) parentValue).clone();
+            } else {
+                return null;
+            }
+        }
+    }
+}
+```
+
+```java
+package org.qiyu.live.web.starter.context;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.qiyu.live.common.interfaces.enums.GatewayHeaderEnum;
+import org.qiyu.live.web.starter.constants.RequestConstants;
+import org.springframework.util.StringUtils;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.ModelAndView;
+
+/**
+ * 旗鱼直播 用户信息拦截器
+ */
+public class QiyuUserInfoInterceptor implements HandlerInterceptor {
+
+    //所有web请求来到这里的时候，都要被拦截
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        String userIdStr = request.getHeader(GatewayHeaderEnum.USER_LOGIN_ID.getName());
+        //参数判断，userID是否为空
+        //可能走的是白名单url
+        if (StringUtils.isEmpty(userIdStr)) {
+            System.out.println("白名单请求：放行");
+            return true;
+        }
+        //如果userId不为空，则把它放在线程本地变量里面去
+        QiyuRequestContext.set(RequestConstants.QIYU_USER_ID, Long.valueOf(userIdStr));
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        QiyuRequestContext.clear();
+    }
+}
+```
+
+```java
+package org.qiyu.live.web.starter.constants;
+
+public enum RequestConstants {
+
+    QIYU_USER_ID,
+}
+```
+
+```java
+package org.qiyu.live.web.starter.config;
+
+import org.qiyu.live.web.starter.context.QiyuUserInfoInterceptor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Bean
+    public QiyuUserInfoInterceptor qiyuUserInfoInterceptor() {
+        return new QiyuUserInfoInterceptor();
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(qiyuUserInfoInterceptor()).addPathPatterns("/**").excludePathPatterns("/error");
+    }
+}
+```
+
+新建META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports：
+
+```properties
+org.qiyu.live.web.starter.config.WebConfig
+```
 
 
 
+**在qiyu-live-api模块：**
 
+引入刚创建的starter
 
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-framework-web-starter</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
 
+```java
+package org.qiyu.live.api.controller;
 
+import org.qiyu.live.common.interfaces.vo.WebResponseVO;
+import org.qiyu.live.web.starter.context.QiyuRequestContext;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+@RestController
+@RequestMapping("/home")
+public class HomePageController {
+    
+    @PostMapping("/initPage")
+    public WebResponseVO initPage() {
+        Long userId = QiyuRequestContext.getUserId();
+        System.out.println(userId);
+        //前端调用initPage --> success状态则代表已经登录过，token有效，前端可隐藏登录按钮
+        return WebResponseVO.success();
+    }
+}
+```
 
-
-
+> 这个controller使用来通知前端，是否已经登录成功并携带token，并演示怎么获取userId，自己的项目请根据需求获取
 
 # end

@@ -25,6 +25,9 @@
         <module>qiyu-live-msg-interface</module>
         <module>qiyu-live-account-provider</module>
         <module>qiyu-live-account-interface</module>
+        <module>qiyu-live-im-core-server</module>
+        <module>qiyu-live-im-interface</module>
+        <module>qiyu-live-im-provider</module>
     </modules>
 
     <properties>
@@ -42,6 +45,7 @@
         <spring-cloud-starter-loadbalancer.version>4.0.3</spring-cloud-starter-loadbalancer.version>
         <spring-cloud-starter-bootstrap.version>3.0.2</spring-cloud-starter-bootstrap.version>
         <alibaba-fastjson.version>2.0.10</alibaba-fastjson.version>
+        <netty-all.version>4.1.18.Final</netty-all.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>

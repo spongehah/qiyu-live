@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    Docker部署logback.xml文件，
+    用于将项目输出的日志持久化到磁盘，并分类，分为info日志和error日志，并可以设置保留期
+    类IpLogConversionRule需要自己写：并修改xml文件中该类的引用地址
+    import ch.qos.logback.core.PropertyDefinerBase;
+
+    import java.net.InetAddress;
+    import java.net.UnknownHostException;
+    import java.util.concurrent.ThreadLocalRandom;
+    
+    /**
+     * 保证每个docker容器的日志挂载目录唯一性
+     */
+    public class IpLogConversionRule extends PropertyDefinerBase {
+    
+        @Override
+        public String getPropertyValue() {
+            return this.getLogIndex();
+        }
+    
+        private String getLogIndex() {
+            try {
+                return InetAddress.getLocalHost().getHostAddress();
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+            return String.valueOf(ThreadLocalRandom.current().nextInt(100000));
+        }
+    }
+-->
+<configuration>
+
+    <springProperty name="APP_NAME" scope="context" source="spring.application.name" defaultValue="undefined"/>
+    <!--用于生成一个标识，防止多个Docker容器映射到同一台宿主机上出现目录名重复问题，此类需要自己写-->
+    <define name="index" class="org.qiyu.live.common.interfaces.utils.IpLogConversionRule"/>
+    <property name="LOG_HOME"  value="/tmp/logs/${APP_NAME}/${index}"/>
+    <property name="LOG_PATTERN"  value="[%d{yyyy-MM-dd HH:mm:ss.SSS} -%5p] %-40.40logger{39} :%msg%n"/>
+
+    <!--控制台标准继续输出内容-->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <!--日志输出的格式-->
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>${LOG_PATTERN}</pattern>
+        </layout>
+    </appender>
+
+    <!--info级别的日志，记录到对应的文件内-->
+    <appender name="INFO_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!--日志文件地址和文件名-->
+        <file>${LOG_HOME}/${APP_NAME}.log</file>、
+        <!--滚动策略，日志生成的时候会按照时间来进行分类，例如2023-05-11日的日志，后缀就会有2023-05-11，每天的日志归档后的名字都不一样-->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}.log.%d{yyyy-MM-dd}</fileNamePattern>
+            <!--日志只保留1个月-->
+            <maxHistory>1</maxHistory>
+        </rollingPolicy>
+        <!--日志输出的格式-->
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>${LOG_PATTERN}</pattern>
+        </layout>
+    </appender>
+
+    <!--error级别的日志，记录到对应的文件内-->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!--日志文件地址和文件名-->
+        <file>${LOG_HOME}/${APP_NAME}_error.log</file>
+        <!--滚动策略，日志生成的时候会按照时间来进行分类，例如2023-05-11日的日志，后缀就会有2023-05-11，每天的日志归档后的名字都不一样-->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}_error.log.%d{yyyy-MM-dd}</fileNamePattern>
+            <!--日志只保留1个月-->
+            <maxHistory>1</maxHistory>
+        </rollingPolicy>
+        <!--日志输出的格式-->
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <pattern>${LOG_PATTERN}</pattern>
+        </layout>
+        <!--过滤：只记录ERROR级别的日志-->
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>error</level>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- 根输出级别为INFO，控制台中将出现包含info及以上级别的日志-->
+    <!-- 日志输出级别 -->
+    <root level="INFO">
+        <!-- ref值与上面的appender标签的name相对应 -->
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+    </root>
+</configuration>

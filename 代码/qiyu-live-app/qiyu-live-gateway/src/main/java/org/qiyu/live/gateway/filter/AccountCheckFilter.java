@@ -12,13 +12,19 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpCookie;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+
+import static io.netty.handler.codec.http.cookie.CookieHeaderNames.MAX_AGE;
+import static org.springframework.web.cors.CorsConfiguration.ALL;
+
 
 @Component
 public class AccountCheckFilter implements GlobalFilter, Ordered {
@@ -35,6 +41,19 @@ public class AccountCheckFilter implements GlobalFilter, Ordered {
         // 获取请求url，判断是否为空，如果为空则返回请求不通过
         ServerHttpRequest request = exchange.getRequest();
         String reqUrl = request.getURI().getPath();
+        // 允许跨域请求（和api模块中地loginserviceimpl中地一样，设置了域名才加这个，我这里无法解决跨域就没有设置域名）
+        ServerHttpResponse response = exchange.getResponse();
+        HttpHeaders headers = response.getHeaders();
+        // headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://web.qiyu.live.com:5500");
+        // 这里我们不设置域名，就设置为localhost
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:5500");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, "POST, GET");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
+        headers.add(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "*");
+        headers.add(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, ALL);
+        headers.add(HttpHeaders.ACCESS_CONTROL_MAX_AGE, MAX_AGE);
+
+
         if (StringUtils.isEmpty(reqUrl)) {
             return Mono.empty();
         }
