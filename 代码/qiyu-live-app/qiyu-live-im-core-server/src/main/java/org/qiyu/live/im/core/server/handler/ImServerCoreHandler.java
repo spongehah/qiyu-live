@@ -1,18 +1,23 @@
 package org.qiyu.live.im.core.server.handler;
 
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import jakarta.annotation.Resource;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
 import org.qiyu.live.im.core.server.common.ImContextAttr;
 import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.impl.LogoutMsgHandler;
 import org.springframework.stereotype.Component;
 
 @Component
+@ChannelHandler.Sharable
 public class ImServerCoreHandler extends SimpleChannelInboundHandler {
     
     @Resource
     private ImHandlerFactory imHandlerFactory;
+    @Resource
+    private LogoutMsgHandler logoutMsgHandler;
     
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {

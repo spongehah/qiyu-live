@@ -28,6 +28,9 @@
         <module>qiyu-live-im-core-server</module>
         <module>qiyu-live-im-interface</module>
         <module>qiyu-live-im-provider</module>
+        <module>qiyu-live-im-core-server-interface</module>
+        <module>qiyu-live-im-router-interface</module>
+        <module>qiyu-live-im-router-provider</module>
     </modules>
 
     <properties>

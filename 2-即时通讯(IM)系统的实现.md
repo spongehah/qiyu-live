@@ -30,7 +30,7 @@ IM全称是Instant Messaging，成为了社交/直播/电商等产品中非常�
 
 ![image-20240211231531191](image/2-即时通讯(IM)系统的实现.assets/image-20240211231531191.png)
 
-> 但是广播消息会发送给所有的IM服务，但是我们肯定某次只与其中的部分IM服务连接，所以广播模式不很如意，若以我们推出了以下的路由模式，就是将广播换成了一个路由模块，可以定位到具体的机器
+> 但是广播消息会发送给所有的IM服务，但是我们某个用户肯定某次只与其中的一台IM服务器建立长连接，所以广播模式不很如意，若以我们推出了以下的路由模式，就是将广播换成了一个路由模块，可以定位到具体的IM机器
 
 **基于推模式我们在线消息推送的模型2：路由模式：**
 
@@ -517,9 +517,9 @@ package org.qiyu.live.im.constants;
 public enum ImMsgCodeEnum {
     
     IM_LOGIN_MSG(1001, "登录im消息包"),
-    IM_LOGOUT_MSG(1001, "登出im消息包"),
-    IM_BIZ_MSG(1001, "常规业务消息包"),
-    IM_HEARTBEAT_MSG(1001, "im服务心跳消息包");
+    IM_LOGOUT_MSG(1002, "登出im消息包"),
+    IM_BIZ_MSG(1003, "常规业务消息包"),
+    IM_HEARTBEAT_MSG(1004, "im服务心跳消息包");
 
     private int code;
     private String desc;
@@ -559,7 +559,6 @@ public enum ImMsgCodeEnum {
             </exclusion>
         </exclusions>
     </dependency>
-
     <dependency>
         <groupId>org.apache.dubbo</groupId>
         <artifactId>dubbo-spring-boot-starter</artifactId>
@@ -586,6 +585,21 @@ public enum ImMsgCodeEnum {
         <version>${netty-all.version}</version>
     </dependency>
     <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>io.lettuce</groupId>
+                <artifactId>lettuce-core</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    <!--Netty依赖与lettuce冲突，换用jedis-->
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+    </dependency>
+    <dependency>
         <groupId>com.alibaba</groupId>
         <artifactId>fastjson</artifactId>
         <version>${alibaba-fastjson.version}</version>
@@ -610,6 +624,12 @@ public enum ImMsgCodeEnum {
         <groupId>org.hah</groupId>
         <artifactId>qiyu-live-framework-redis-starter</artifactId>
         <version>1.0-SNAPSHOT</version>
+        <exclusions>
+            <exclusion>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-data-redis</artifactId>
+            </exclusion>
+        </exclusions>
     </dependency>
 </dependencies>
 ```
@@ -1175,10 +1195,13 @@ ImServerCoreHandler将imHandlerFactory替换为Spring注入：
 
 ```java
 @Component
+@ChannelHandler.Sharable
 public class ImServerCoreHandler extends SimpleChannelInboundHandler {
     
     @Resource
     private ImHandlerFactory imHandlerFactory;
+    @Resource
+    private LogoutMsgHandler logoutMsgHandler;
     
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
@@ -1401,7 +1424,29 @@ public interface ImTokenRpc {
 }
 ```
 
+**qiyu-live-framework-redis-starter：**
 
+```java
+package org.idea.qiyu.live.framework.redis.starter.key;
+
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
+
+
+@Configuration
+@Conditional(RedisKeyLoadMatch.class)
+public class ImProviderCacheKeyBuilder extends RedisKeyBuilder {
+
+    private static String IM_LOGIN_TOKEN = "imLoginToken";
+
+    public String buildImLoginTokenKey(String token) {
+        return super.getPrefix() + IM_LOGIN_TOKEN + super.getSplitItem() + token;
+    }
+
+}
+```
+
+在META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports中粘贴上面新builder的路径
 
 **新建qiyu-live-im-provider：**
 
@@ -1691,6 +1736,44 @@ public class ImContextAttr {
 }
 ```
 
+```java
+package org.qiyu.live.im.core.server.common;
+
+import io.netty.channel.ChannelHandlerContext;
+
+/**
+ * 封装 获取/存入 netty域信息的工具类
+ */
+public class ImContextUtils {
+    
+    public static Long getUserId(ChannelHandlerContext ctx) {
+        return ctx.attr(ImContextAttr.USER_ID).get();
+    }
+    
+    public static void setUserId(ChannelHandlerContext ctx, Long userId) {
+        ctx.attr(ImContextAttr.USER_ID).set(userId);
+    }
+    
+    public static void removeUserId(ChannelHandlerContext ctx) {
+        ctx.attr(ImContextAttr.USER_ID).remove();
+    }
+    
+    public static Integer getAppId(ChannelHandlerContext ctx) {
+        return ctx.attr(ImContextAttr.APP_ID).get();
+    }
+    
+    public static void setAppId(ChannelHandlerContext ctx, Integer appId) {
+        ctx.attr(ImContextAttr.APP_ID).set(appId);
+    }
+
+    public static void removeAppId(ChannelHandlerContext ctx) {
+        ctx.attr(ImContextAttr.APP_ID).remove();
+    }
+}
+```
+
+
+
 **LoginMsgHandler具体实现：**
 
 ```java
@@ -1703,7 +1786,7 @@ import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.im.constants.AppIdEnum;
 import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
-import org.qiyu.live.im.core.server.common.ImContextAttr;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
 import org.qiyu.live.im.dto.ImMsgBody;
@@ -1723,8 +1806,16 @@ public class LoginMsgHandler implements SimpleHandler {
     @DubboReference
     private ImTokenRpc imTokenRpc;
 
+    /**
+     * 想要建立连接的话，我们需要进行一系列的参数校验，
+     * 然后参数无误后，验证存储的userId和消息中的userId是否相同，相同才允许建立连接
+     */
     @Override
     public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
+        // 防止重复请求：login允许连接才放如userId，若已经允许连接就不再接收login请求包
+        if (ImContextUtils.getUserId(ctx) != null) {
+            return;
+        }
         byte[] body = imMsg.getBody();
         if (body == null || body.length == 0) {
             ctx.close();
@@ -1734,20 +1825,21 @@ public class LoginMsgHandler implements SimpleHandler {
         ImMsgBody imMsgBody = JSON.parseObject(new String(body), ImMsgBody.class);
         String token = imMsgBody.getToken();
         Long userIdFromMsg = imMsgBody.getUserId();
-        int appId = imMsgBody.getAppId();
+        Integer appId = imMsgBody.getAppId();
         if (StringUtils.isEmpty(token) || userIdFromMsg < 10000 || appId < 10000) {
             ctx.close();
             LOGGER.error("param error, imMsg is {}", imMsg);
             throw new IllegalArgumentException("param error");
         }
         Long userId = imTokenRpc.getUserIdByToken(token);
-        //从RPC获取的userId和传递过来的userId相等，则没出现差错，允许建立连接
-        if(userId != null && userId.equals(userIdFromMsg)) {
-            //按照userId保存好相关的channel信息
+        // 从RPC获取的userId和传递过来的userId相等，则没出现差错，允许建立连接
+        if (userId != null && userId.equals(userIdFromMsg)) {
+            // 按照userId保存好相关的channel信息
             ChannelHandlerContextCache.put(userId, ctx);
-            //将userId保存到netty域信息中，用于正常/非正常logout的处理
-            ctx.attr(ImContextAttr.USER_ID).set(userId);
-            //将im消息回写给客户端
+            // 将userId保存到netty域信息中，用于正常/非正常logout的处理
+            ImContextUtils.setUserId(ctx, userId);
+            ImContextUtils.setAppId(ctx, appId);
+            // 将im消息回写给客户端
             ImMsgBody respBody = new ImMsgBody();
             respBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
             respBody.setUserId(userId);
@@ -1755,8 +1847,9 @@ public class LoginMsgHandler implements SimpleHandler {
             ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(respBody));
             LOGGER.info("[LoginMsgHandler] login success, userId is {}, appId is {}", userId, appId);
             ctx.writeAndFlush(imMsg);
+            return;
         }
-        //不允许建立连接
+        // 不允许建立连接
         ctx.close();
         LOGGER.error("token error, imMsg is {}", imMsg);
         throw new IllegalArgumentException("token error");
@@ -1769,11 +1862,14 @@ public class LoginMsgHandler implements SimpleHandler {
 ```java
 package org.qiyu.live.im.core.server.handler.impl;
 
+import com.alibaba.fastjson.JSON;
 import io.netty.channel.ChannelHandlerContext;
+import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
-import org.qiyu.live.im.core.server.common.ImContextAttr;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.qiyu.live.im.dto.ImMsgBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -1788,14 +1884,25 @@ public class LogoutMsgHandler implements SimpleHandler {
     
     @Override
     public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
-        System.out.println("[logout]:" + imMsg);
-        Long userId = ctx.attr(ImContextAttr.USER_ID).get();
-        if(userId == null){
+        Long userId = ImContextUtils.getUserId(ctx);
+        Integer appId = ImContextUtils.getAppId(ctx);
+        if(userId == null || appId == null){
             LOGGER.error("attr error, imMsg is {}", imMsg);
+            //有可能是错误的消息包导致，直接放弃连接
+            ctx.close();
             throw new IllegalArgumentException("attr error");
         }
+        //将IM消息回写给客户端
+        ImMsgBody respBody = new ImMsgBody();
+        respBody.setUserId(userId);
+        respBody.setAppId(appId);
+        respBody.setData("true");
+        ctx.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGOUT_MSG.getCode(), JSON.toJSONString(respBody)));
+        LOGGER.info("[LogoutMsgHandler] logout success, userId is {}, appId is {}", userId, appId);
         //理想情况下：客户端短线的时候发送短线消息包
         ChannelHandlerContextCache.remove(userId);
+        ImContextUtils.removeUserId(ctx);
+        ImContextUtils.removeAppId(ctx);
         ctx.close();
     }
 }
@@ -1822,6 +1929,8 @@ public class ImServerCoreHandler extends SimpleChannelInboundHandler {
 ```
 
 **登入功能测试：**
+
+测试也改由SpringBoot启动
 
 qiyu-live-im-core-server的test包下：
 
@@ -1898,13 +2007,785 @@ public class ImClientHandler implements InitializingBean {
 }
 ```
 
+```java
+package imClient;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+public class ImClientApplication {
+
+    public static void main(String[] args) {
+        SpringApplication springApplication = new SpringApplication(ImClientApplication.class);
+        springApplication.setWebApplicationType(WebApplicationType.NONE);
+        springApplication.run(args);
+    }
+}
+```
+
 ## 3.3 心跳包功能实现
 
+**qiyu-live-framework-redis-starter：**
+
+```java
+package org.idea.qiyu.live.framework.redis.starter.key;
+
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@Conditional(RedisKeyLoadMatch.class)
+public class ImCoreServerProviderCacheKeyBuilder extends RedisKeyBuilder {
+
+    private static String IM_ONLINE_ZSET = "imOnlineZset";
+    private static String IM_ACK_MAP = "imAckMap";
+
+    public String buildImAckMapKey(Long userId,Integer appId) {
+        return super.getPrefix() + IM_ACK_MAP + super.getSplitItem() + appId + super.getSplitItem() + userId % 100;
+    }
+
+    /**
+     * 按照用户id取模10000，得出具体缓存所在的key
+     *
+     * @param userId
+     * @return
+     */
+    public String buildImLoginTokenKey(Long userId, Integer appId) {
+        return super.getPrefix() + IM_ONLINE_ZSET + super.getSplitItem() + appId + super.getSplitItem() + userId % 10000;
+    }
+
+}
+```
+
+在META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports中粘贴上面新builder的路径
+
+**qiyu-live-im-interface：**
+
+```java
+package org.qiyu.live.im.constants;
+
+public class ImConstants {
+    
+    public static final short DEFAULT_MAGIC = 18673;
+
+    /**
+     * 发送心跳包的默认间隔时间
+     */
+    public static final int DEFAULT_HEART_BEAT_GAP = 30;
+}
+```
 
 
 
+**qiyu-live-im-core-server：**
+
+**HeartBeatImMsgHandler的具体实现：**
+
+```java
+package org.qiyu.live.im.core.server.handler.impl;
+
+import com.alibaba.fastjson.JSON;
+import io.netty.channel.ChannelHandlerContext;
+import jakarta.annotation.Resource;
+import org.idea.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
+import org.qiyu.live.im.constants.ImConstants;
+import org.qiyu.live.im.constants.ImMsgCodeEnum;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
+import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * 心跳消息处理器
+ */
+@Component
+public class HeartBeatImMsgHandler implements SimpleHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HeartBeatImMsgHandler.class);
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    @Resource
+    private ImCoreServerProviderCacheKeyBuilder cacheKeyBuilder;
+    
+    @Override
+    public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
+        System.out.println("[heartbear]:" + imMsg);
+        // 心跳包的基本校验
+        Long userId = ImContextUtils.getUserId(ctx);
+        Integer appId = ImContextUtils.getAppId(ctx);
+        if (userId == null || appId == null) {
+            LOGGER.error("attr error, imMsg is {}", imMsg);
+            // 有可能是错误的消息包导致，直接放弃连接
+            ctx.close();
+            throw new IllegalArgumentException("attr error");
+        }
+        // 心跳包record记录
+        String redisKey = cacheKeyBuilder.buildImLoginTokenKey(userId, appId);
+        this.recordOnlineTime(userId, redisKey);
+        this.removeExpireRecord(redisKey);
+        redisTemplate.expire(redisKey, 5L, TimeUnit.MINUTES);
+        //回写给客户端
+        ImMsgBody respBody = new ImMsgBody();
+        respBody.setUserId(userId);
+        respBody.setAppId(appId);
+        respBody.setData("true");
+        LOGGER.info("[HeartBeatImMsgHandler] heartbeat msg, userId is {}, appId is {}", userId, appId);
+        ctx.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_HEARTBEAT_MSG.getCode(), JSON.toJSONString(respBody)));
+    }
+
+    /**
+     * 清理掉过期不在线的用户留下的心跳记录（两次心跳时间更友好）
+     * 为什么不直接设置TTL让他自动过期？
+     * 因为我们build redisKey的时候，是对userId%10000进行构建的，一个用户心跳记录只是zset中的一个键值对，而不是整个zset对象
+     */
+    private void removeExpireRecord(String redisKey) {
+        redisTemplate.opsForZSet().removeRangeByScore(redisKey, 0, System.currentTimeMillis() - 2 * ImConstants.DEFAULT_HEART_BEAT_GAP * 1000);
+    }
+
+    /**
+     * 记录用户最近一次心跳时间到Redis上
+     */
+    private void recordOnlineTime(Long userId, String redisKey) {
+        redisTemplate.opsForZSet().add(redisKey, userId, System.currentTimeMillis());
+    }
+}
+```
 
 
+
+**心跳包测试：**
+
+修改ImClientHandler：
+
+```java
+@Service
+public class ImClientHandler implements InitializingBean {
+    
+    @DubboReference
+    private ImTokenRpc imTokenRpc;
+    
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                NioEventLoopGroup clientGroup = new NioEventLoopGroup();
+                Bootstrap bootstrap = new Bootstrap();
+                bootstrap.group(clientGroup);
+                bootstrap.channel(NioSocketChannel.class);
+                bootstrap.handler(new ChannelInitializer<>() {
+                    @Override
+                    protected void initChannel(Channel channel) throws Exception {
+                        System.out.println("初始化连接建立");
+                        channel.pipeline().addLast(new ImMsgEncoder());
+                        channel.pipeline().addLast(new ImMsgDecoder());
+                        channel.pipeline().addLast(new ClientHandler());
+                    }
+                });
+
+                //测试代码段1：建立连接并保存channel
+                Map<Long, Channel> userIdChannelMap = new HashMap<>();
+                for (int i = 0; i < 10; i++) {
+                    Long userId = 10000L + i;
+                    ChannelFuture channelFuture = null;
+                    try {
+                        channelFuture = bootstrap.connect("localhost", 8085).sync();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    Channel channel = channelFuture.channel();
+                    String token = imTokenRpc.createImLoginToken(userId, AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                    ImMsgBody imMsgBody = new ImMsgBody();
+                    imMsgBody.setUserId(userId);
+                    imMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                    imMsgBody.setToken(token);
+                    channel.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(imMsgBody)));
+                    userIdChannelMap.put(userId, channel);
+                }
+
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                //测试代码段2：持续发送心跳包
+                while (true) {
+                    for (Long userId : userIdChannelMap.keySet()) {
+                        ImMsgBody heartBeatBody = new ImMsgBody();
+                        heartBeatBody.setUserId(userId);
+                        heartBeatBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                        ImMsg heartBeatMsg = ImMsg.build(ImMsgCodeEnum.IM_HEARTBEAT_MSG.getCode(), JSON.toJSONString(heartBeatBody));
+                        userIdChannelMap.get(userId).writeAndFlush(heartBeatMsg);
+                    }
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }).start();
+    }
+}
+```
+
+## 3.4 业务包功能实现
+
+**qiyu-live-common-interface：**
+
+```java
+package org.qiyu.live.common.interfaces.topic;
+
+public class ImCoreServerProviderTopicNames {
+
+    /**
+     * 接收im系统发送的业务消息包
+     */
+    public static final String QIYU_LIVE_IM_BIZ_MSG_TOPIC = "qiyu_live_im_biz_msg_topic";
+}
+```
+
+
+
+**qiyu-live-im-core-server和qiyu-live-msg-provider：**
+
+两个模块都引入kafka依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.kafka</groupId>
+    <artifactId>spring-kafka</artifactId>
+</dependency>
+```
+
+两个模块都nacos配置文件添加kafka配置：
+
+```yaml
+  # Kafka配置，前缀是spring
+  kafka:
+    bootstrap-servers: hahhome:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+```
+
+qiyu-live-msg-provider添加发送消息的Kafka消费者：
+
+```java
+package org.qiyu.live.msg.provider.kafka;
+
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class ImBizMsgKafkaConsumer {
+    
+    @KafkaListener(topics = ImCoreServerProviderTopicNames.QIYU_LIVE_IM_BIZ_MSG_TOPIC, groupId = "im-send-biz-msg")
+    public void consumeImTopic(String msg) {
+        System.out.println(msg);
+    }
+}
+```
+
+
+
+**BizImMsgHandler的具体实现：**
+
+业务包功能的实现
+
+```java
+package org.qiyu.live.im.core.server.handler.impl;
+
+import io.netty.channel.ChannelHandlerContext;
+import jakarta.annotation.Resource;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
+import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.CompletableFuture;
+
+
+/**
+ * 业务消息处理器
+ */
+@Component
+public class BizImMsgHandler implements SimpleHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BizImMsgHandler.class);
+
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Override
+    public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
+        // 前期的参数校验
+        Long userId = ImContextUtils.getUserId(ctx);
+        Integer appId = ImContextUtils.getAppId(ctx);
+        if (userId == null || appId == null) {
+            LOGGER.error("attr error, imMsg is {}", imMsg);
+            // 有可能是错误的消息包导致，直接放弃连接
+            ctx.close();
+            throw new IllegalArgumentException("attr error");
+        }
+        byte[] body = imMsg.getBody();
+        if (body == null || body.length == 0) {
+            LOGGER.error("body error ,imMsg is {}", imMsg);
+            return;
+        }
+        // 发送消息
+        CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(ImCoreServerProviderTopicNames.QIYU_LIVE_IM_BIZ_MSG_TOPIC, new String(body));
+        sendResult.whenComplete((v, e) -> {
+            if (e == null) {
+                LOGGER.info("[BizImMsgHandler]消息投递成功, sendResult is {}", v);
+            }
+        }).exceptionally(e -> {
+            LOGGER.error("send error, error is :", e);
+            throw new RuntimeException(e);
+        });
+    }
+}
+```
+
+
+
+**业务包测试：**
+
+将测试代码段2改为下面这部分
+
+```java
+//测试代码段2：持续发送业务消息包
+while (true) {
+    for (Long userId : userIdChannelMap.keySet()) {
+        ImMsgBody bizBody = new ImMsgBody();
+        bizBody.setUserId(userId);
+        bizBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("userId", userId);
+        jsonObject.put("objectId", 100001L);
+        jsonObject.put("content", "你好，我是" + userId);
+        bizBody.setData(JSON.toJSONString(jsonObject));
+        ImMsg bizMsg = ImMsg.build(ImMsgCodeEnum.IM_BIZ_MSG.getCode(), JSON.toJSONString(bizBody));
+        userIdChannelMap.get(userId).writeAndFlush(bizMsg);
+    }
+    try {
+        Thread.sleep(1000);
+    } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+    }
+}
+```
+
+## 3.5 Router模块的设计与实现
+
+到现在，我们Netty的核心server的核心handler实现完成
+
+### 1 Router模块的搭建
+
+**新建qiyu-live-im-core-server-interface：**
+
+```java
+package org.qiyu.live.im.core.server.interfaces.rpc;
+
+/**
+ * 专门给Router层的服务进行调用的接口
+ */
+public interface IRouterHandlerRpc {
+
+    /**
+     * 按照用户id进行消息的发送
+     */
+    void sendMsg(Long userId, String msgJson);
+}
+```
+
+
+
+**qiyu-live-im-core-server：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-core-server-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+测试代码：
+
+```java
+package org.qiyu.live.im.core.server.rpc;
+
+import org.apache.dubbo.config.annotation.DubboService;
+import org.qiyu.live.im.core.server.interfaces.rpc.IRouterHandlerRpc;
+
+@DubboService
+public class RouterHandlerRpcImpl implements IRouterHandlerRpc {
+    @Override
+    public void sendMsg(Long userId, String msgJson) {
+        System.out.println("this is im-core-server");
+    }
+}
+```
+
+启动类添加@EnableDubbo
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableDubbo
+public class ImCoreServerApplication {
+```
+
+修改nacos配置文件，添加dubbo配置：
+
+```yaml
+dubbo:
+  application:
+    name: ${spring.application.name}
+    qos-enable: false
+  registry:
+    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+  protocol:
+    name: dubbo
+    port: 9095
+    threadpool: fixed
+    dispatcher: execution
+    threads: 500
+    accepts: 500
+```
+
+
+
+**新建qiyu-live-im-router-interface：**
+
+```java
+package org.qiyu.live.im.router.interfaces;
+
+public interface ImRouterRpc {
+
+    /**
+     * 按照用户id进行消息的发送
+     */
+    boolean sendMsg(Long userId, String msgJson);
+}
+```
+
+
+
+**新建qiyu-live-im-router-provider：**
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <exclusions>
+        <exclusion>
+            <artifactId>log4j-to-slf4j</artifactId>
+            <groupId>org.apache.logging.log4j</groupId>
+        </exclusion>
+    </exclusions>
+</dependency>
+
+<dependency>
+    <groupId>org.apache.dubbo</groupId>
+    <artifactId>dubbo-spring-boot-starter</artifactId>
+    <version>3.2.0-beta.3</version>
+</dependency>
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+<!--在SpringBoot 2.4.x的版本之后，对于bootstrap.properties/bootstrap.yaml配置文件(我们合起来成为Bootstrap配置文件)的支持，需要导入该jar包-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+    <version>3.0.2</version>
+</dependency>
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>fastjson</artifactId>
+    <version>${alibaba-fastjson.version}</version>
+    <exclusions>
+        <exclusion>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-api</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.kafka</groupId>
+    <artifactId>spring-kafka</artifactId>
+</dependency>
+
+<!--自定义-->
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-common-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-core-server-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-router-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+bootstrap.yml：
+
+```yaml
+spring:
+  application:
+    name: qiyu-live-im-router-provider
+  cloud:
+    nacos:
+      username: qiyu
+      password: qiyu
+      discovery:
+        server-addr: nacos.server:8848
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+      config:
+        import-check:
+          enabled: false
+        # 当前服务启动后去nacos中读取配置文件的后缀
+        file-extension: yml
+        # 读取配置的nacos地址
+        server-addr: nacos.server:8848
+        # 读取配置的nacos的名空间
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        group: DEFAULT_GROUP
+  config:
+    import:
+      - optional:nacos:${spring.application.name}.yml
+        
+dubbo:
+  consumer:
+    cluster: imRouter
+```
+
+复制logback-spring.xml
+
+nacos新建qiyu-live-im-router-provider.yml：
+
+```yaml
+spring:
+  application:
+    name: qiyu-live-im-router-provider
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+  registry:
+    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+  protocol:
+    name: dubbo
+    port: 9094
+    threadpool: fixed
+    dispatcher: execution
+    threads: 500
+    accepts: 500
+```
+
+```java
+package org.qiyu.live.im.router.provider.rpc;
+
+import jakarta.annotation.Resource;
+import org.apache.dubbo.config.annotation.DubboService;
+import org.qiyu.live.im.router.interfaces.ImRouterRpc;
+import org.qiyu.live.im.router.provider.service.ImRouterService;
+
+@DubboService
+public class ImRouterRpcImpl implements ImRouterRpc {
+    
+    @Resource
+    private ImRouterService routerService;
+
+    @Override
+    public boolean sendMsg(Long userId, String msgJson) {
+        routerService.sendMsg(userId, msgJson);
+        return true;
+    }
+}
+```
+
+```java
+package org.qiyu.live.im.router.provider.service;
+
+public interface ImRouterService {
+
+    boolean sendMsg(Long userId, String msgJson);
+}
+```
+
+### 2 基于RPC上下文实现转发
+
+> 基于Cluster去做spi扩展，实现根据rpc上下文来选择具体请求的机器
+
+```java
+package org.qiyu.live.im.router.provider.service.impl;
+
+import org.apache.dubbo.config.annotation.DubboReference;
+import org.apache.dubbo.rpc.RpcContext;
+import org.qiyu.live.im.core.server.interfaces.rpc.IRouterHandlerRpc;
+import org.qiyu.live.im.router.provider.service.ImRouterService;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ImRouterServiceImpl implements ImRouterService {
+    
+    @DubboReference
+    private IRouterHandlerRpc routerHandlerRpc;
+    
+    @Override
+    public boolean sendMsg(Long userId, String msgJson) {
+        String objectImServerIp = "192.168.101.104:9095";//core-server的ip地址+routerHandlerRpc调用的端口
+        RpcContext.getContext().set("ip", objectImServerIp);
+        routerHandlerRpc.sendMsg(userId, msgJson);
+        return true;
+    }
+}
+```
+
+```java
+package org.qiyu.live.im.router.provider.cluster;
+
+import org.apache.dubbo.rpc.Invoker;
+import org.apache.dubbo.rpc.RpcException;
+import org.apache.dubbo.rpc.cluster.Cluster;
+import org.apache.dubbo.rpc.cluster.Directory;
+
+/**
+ * 基于Cluster去做spi扩展，实现根据rpc上下文来选择具体请求的机器
+ */
+public class ImRouterCluster implements Cluster {
+
+    @Override
+    public <T> Invoker<T> join(Directory<T> directory, boolean buildFilterChain) throws RpcException {
+        return new ImRouterClusterInvoker<>(directory);
+    }
+}
+```
+
+```java
+package org.qiyu.live.im.router.provider.cluster;
+
+import io.micrometer.common.util.StringUtils;
+import org.apache.dubbo.rpc.*;
+import org.apache.dubbo.rpc.cluster.Directory;
+import org.apache.dubbo.rpc.cluster.LoadBalance;
+import org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker;
+
+import java.util.List;
+
+public class ImRouterClusterInvoker<T> extends AbstractClusterInvoker<T> {
+
+    public ImRouterClusterInvoker(Directory<T> directory) {
+        super(directory);
+    }
+
+    @Override
+    protected Result doInvoke(Invocation invocation, List list, LoadBalance loadbalance) throws RpcException {
+        checkWhetherDestroyed();
+        String ip = (String) RpcContext.getContext().get("ip");
+        if (StringUtils.isEmpty(ip)) {
+            throw new RuntimeException("ip can not be null!");
+        }
+        //获取到指定的rpc服务提供者的所有地址信息
+        List<Invoker<T>> invokers = list(invocation);
+        Invoker<T> matchInvoker = invokers.stream().filter(invoker -> {
+            //拿到我们服务提供者的暴露地址（ip:端口 的格式）
+            String serverIp = invoker.getUrl().getHost() + ":" + invoker.getUrl().getPort();
+            return serverIp.equals(ip);
+        }).findFirst().orElse(null);
+        if (matchInvoker == null) {
+            throw new RuntimeException("ip is invalid");
+        }
+        return matchInvoker.invoke(invocation);
+    }
+}
+```
+
+新建META-INF/dubbo/internal/org.apache.dubbo.rpc.cluster.Cluster：
+
+```properties
+imRouter=org.qiyu.live.im.router.provider.cluster.ImRouterCluster
+```
+
+在bootstrap.yml指定：
+
+```yaml
+dubbo:
+  consumer:
+    cluster: imRouter
+```
+
+
+
+**测试：**
+
+```java
+@SpringBootApplication
+@EnableDubbo
+@EnableDiscoveryClient
+public class ImRouterProviderApplication implements CommandLineRunner {
+
+    public static void main(String[] args) {
+        SpringApplication springApplication = new SpringApplication(ImRouterProviderApplication.class);
+        springApplication.setWebApplicationType(WebApplicationType.NONE);
+        springApplication.run(args);
+    }
+    
+    @Resource
+    private ImRouterService routerService;
+
+    @Override
+    public void run(String... args) throws Exception {
+        for(int i = 0; i < 1000; i++) {
+            ImMsgBody imMsgBody = new ImMsgBody();
+            routerService.sendMsg(100001L, JSON.toJSONString(imMsgBody));
+            Thread.sleep(1000);
+        }
+    }
+}
+```
 
 
 
