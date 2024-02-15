@@ -32,14 +32,14 @@ public class BizImMsgHandler implements SimpleHandler {
         Long userId = ImContextUtils.getUserId(ctx);
         Integer appId = ImContextUtils.getAppId(ctx);
         if (userId == null || appId == null) {
-            LOGGER.error("attr error, imMsg is {}", imMsg);
+            LOGGER.error("attr error, imMsgBody is {}", new String(imMsg.getBody()));
             // 有可能是错误的消息包导致，直接放弃连接
             ctx.close();
             throw new IllegalArgumentException("attr error");
         }
         byte[] body = imMsg.getBody();
         if (body == null || body.length == 0) {
-            LOGGER.error("body error ,imMsg is {}", imMsg);
+            LOGGER.error("body error ,imMsgBody is {}", new String(imMsg.getBody()));
             return;
         }
         // 发送消息

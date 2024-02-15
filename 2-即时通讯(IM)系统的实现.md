@@ -30,7 +30,7 @@ IM全称是Instant Messaging，成为了社交/直播/电商等产品中非常�
 
 ![image-20240211231531191](image/2-即时通讯(IM)系统的实现.assets/image-20240211231531191.png)
 
-> 但是广播消息会发送给所有的IM服务，但是我们某个用户肯定某次只与其中的一台IM服务器建立长连接，所以广播模式不很如意，若以我们推出了以下的路由模式，就是将广播换成了一个路由模块，可以定位到具体的IM机器
+> 但是广播消息会发送给所有的IM服务，但是我们某个用户肯定某次只想与其通信的另一个客户端之间的IM服务器通信，所以广播模式不很如意，若以我们推出了以下的路由模式，就是将广播换成了一个路由模块，可以定位到具体的IM机器
 
 **基于推模式我们在线消息推送的模型2：路由模式：**
 
@@ -494,9 +494,12 @@ public class AIOClient {
 
 总而言之，可以理解为，在Unix系统上AIO性能综合表现不如NIO好，所以Netty使用了NIO作为底层的核心。
 
-# 3 IM系统实现
+# 3 IM系统的搭建与全链路的实现
 
-## 3.1 Netty核心server的实现
+IM系统全链路：
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+
+## 3.1 Netty核心server的搭建
 
 ### 1 基于Netty搭建IM系统基本骨架和编解码器
 
@@ -1401,6 +1404,10 @@ public class ImMsgBody implements Serializable {
      */
     private String token;
     /**
+     * 业务类型标识
+     */
+    private int bizCode;
+    /**
      * 和业务服务进行消息传递
      */
     private String data;
@@ -2161,6 +2168,13 @@ public class HeartBeatImMsgHandler implements SimpleHandler {
 }
 ```
 
+在LogoutMsgHandler最后添加：
+
+```java
+// 删除心跳包存活缓存
+stringRedisTemplate.delete(cacheKeyBuilder.buildImLoginTokenKey(userId, appId));
+```
+
 
 
 **心跳包测试：**
@@ -2241,6 +2255,9 @@ public class ImClientHandler implements InitializingBean {
 
 ## 3.4 业务包功能实现
 
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+业务包的功能是，让消息能供从im-server发送到msg-provider进行业务处理
+
 **qiyu-live-common-interface：**
 
 ```java
@@ -2297,6 +2314,7 @@ public class ImBizMsgKafkaConsumer {
     
     @KafkaListener(topics = ImCoreServerProviderTopicNames.QIYU_LIVE_IM_BIZ_MSG_TOPIC, groupId = "im-send-biz-msg")
     public void consumeImTopic(String msg) {
+        //这是测试代码，后序会完善 业务服务逻辑的实现和转发
         System.out.println(msg);
     }
 }
@@ -2404,6 +2422,14 @@ while (true) {
 
 **新建qiyu-live-im-core-server-interface：**
 
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
 ```java
 package org.qiyu.live.im.core.server.interfaces.rpc;
 
@@ -2415,7 +2441,7 @@ public interface IRouterHandlerRpc {
     /**
      * 按照用户id进行消息的发送
      */
-    void sendMsg(Long userId, String msgJson);
+    void sendMsg(ImMsgBody imMsgBody);
 }
 ```
 
@@ -2442,7 +2468,7 @@ import org.qiyu.live.im.core.server.interfaces.rpc.IRouterHandlerRpc;
 @DubboService
 public class RouterHandlerRpcImpl implements IRouterHandlerRpc {
     @Override
-    public void sendMsg(Long userId, String msgJson) {
+    public void sendMsg(ImMsgBody imMsgBody) {
         System.out.println("this is im-core-server");
     }
 }
@@ -2479,6 +2505,14 @@ dubbo:
 
 **新建qiyu-live-im-router-interface：**
 
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
 ```java
 package org.qiyu.live.im.router.interfaces;
 
@@ -2487,7 +2521,7 @@ public interface ImRouterRpc {
     /**
      * 按照用户id进行消息的发送
      */
-    boolean sendMsg(Long userId, String msgJson);
+    boolean sendMsg(ImMsgBody imMsgBody);
 }
 ```
 
@@ -2567,6 +2601,11 @@ public interface ImRouterRpc {
     <artifactId>qiyu-live-im-router-interface</artifactId>
     <version>1.0-SNAPSHOT</version>
 </dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-framework-redis-starter</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
 ```
 
 bootstrap.yml：
@@ -2609,6 +2648,16 @@ nacos新建qiyu-live-im-router-provider.yml：
 spring:
   application:
     name: qiyu-live-im-router-provider
+  data:
+    redis:
+      port: 6379
+      host: hahhome
+      password: 123456
+      lettuce:
+        pool:
+          min-idle: 10
+          max-active: 100
+          max-idle: 10
 
 dubbo:
   application:
@@ -2639,7 +2688,7 @@ public class ImRouterRpcImpl implements ImRouterRpc {
     private ImRouterService routerService;
 
     @Override
-    public boolean sendMsg(Long userId, String msgJson) {
+    public boolean sendMsg(ImMsgBody imMsgBody) {
         routerService.sendMsg(userId, msgJson);
         return true;
     }
@@ -2651,13 +2700,17 @@ package org.qiyu.live.im.router.provider.service;
 
 public interface ImRouterService {
 
-    boolean sendMsg(Long userId, String msgJson);
+    boolean sendMsg(ImMsgBody imMsgBody);
 }
 ```
 
-### 2 基于RPC上下文实现转发
+### 2 基于RPC上下文根据ip实现转发
 
-> 基于Cluster去做spi扩展，实现根据rpc上下文来选择具体请求的机器
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+
+这里我们要实现链路中的Router模块，让消息能定向转发到对应的im-server
+
+> 基于Cluster去做spi扩展，实现根据rpc上下文来选择具体请求的机器（根据ip+端口的格式进行区分）
 
 ```java
 package org.qiyu.live.im.router.provider.service.impl;
@@ -2675,7 +2728,8 @@ public class ImRouterServiceImpl implements ImRouterService {
     private IRouterHandlerRpc routerHandlerRpc;
     
     @Override
-    public boolean sendMsg(Long userId, String msgJson) {
+    public boolean sendMsg(ImMsgBody imMsgBody) {
+        //现在是测试代码，具体代码在下一节实现
         String objectImServerIp = "192.168.101.104:9095";//core-server的ip地址+routerHandlerRpc调用的端口
         RpcContext.getContext().set("ip", objectImServerIp);
         routerHandlerRpc.sendMsg(userId, msgJson);
@@ -2780,12 +2834,455 @@ public class ImRouterProviderApplication implements CommandLineRunner {
     public void run(String... args) throws Exception {
         for(int i = 0; i < 1000; i++) {
             ImMsgBody imMsgBody = new ImMsgBody();
-            routerService.sendMsg(100001L, JSON.toJSONString(imMsgBody));
+            routerService.sendMsg(imMsgBody);
             Thread.sleep(1000);
         }
     }
 }
 ```
+
+### 3 绑定基于转发的IP
+
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+
+> 上面我们在ImRouterServiceImpl中手动指定了ip+端口，现在我们要在im-server端将自己的ip+端口保存到Redis，然后在ImRouterServiceImpl中取出来
+
+**qiyu-live-im-core-server：**
+
+在NettyImServerStarter中，在【基于JVM的钩子函数去实现优雅关闭】的代码段下面添加上以下代码：用于保存启动时im服务器的ip和端口信息到本地缓存ChannelHandlerContextCache中
+
+然后启动im-core-server时要在VM Options中添加以下注释中的参数
+
+```java
+//将启动时im服务器的ip和端口记录下来，用于Router模块转发时使用
+//添加启动参数：
+// -DDUBBO_IP_TO_REGISTRY=192.168.101.104  (启动服务的机器的ip地址)
+// -DDUBBO_PORT_TO_REGISTRY=9096
+//注意VM参数添加的是-D参数，前面是两个D，后面获取property时只有一个D
+try {
+    String registryIp = InetAddress.getLocalHost().getHostAddress();
+    // String registryIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");//部署时我们使用这条语句获取ip地址
+    String registryPort = environment.getProperty("DUBBO_PORT_TO_REGISTRY");
+    System.out.println(registryIp + ":" + registryPort);
+    if(StringUtils.isEmpty(registryIp) || StringUtils.isEmpty(registryPort)) {
+        throw new IllegalArgumentException("启动参数中的注册端口和注册ip不能为空");
+    }
+    ChannelHandlerContextCache.setServerIpAddress(registryIp + ":" + registryPort);
+    LOGGER.info("Netty服务启动成功，机器启动ip和dubbo服务端口为{}", registryIp + ":" + registryPort);
+} catch (UnknownHostException e) {
+    throw new RuntimeException(e);
+}
+```
+
+在LoginMsgHandler中，在【将im消息回写给客户端】的代码段下面添加上以下代码：用于将该userId连接的im-server保存到Redis，供Router转发时取出使用
+
+```java
+// 将im服务器的ip+端口地址保存到Redis，以供Router服务取出进行转发
+stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
+        ChannelHandlerContextCache.getServerIpAddress(),
+        2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+```
+
+在LogoutMsgHandler中，在【客户端短线的时候发送短线消息包】的代码段下面添加上以下代码：删除对应缓存
+
+```java
+// 删除供Router取出的存在Redis的IM服务器的ip+端口地址
+stringRedisTemplate.delete(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId);
+```
+
+在HeartBeatImMsgHandler中，在【回写给客户端】的代码段上面添加上以下代码：用于更新Redis缓存时间
+
+```java
+// 将以供Router服务取出进行转发的im服务器的ip+端口地址进行延时
+redisTemplate.expire(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId, 2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+```
+
+
+
+**qiyu-live-im-router-provider：**
+
+修改ImRouterServiceImpl的代码：
+
+```java
+@Service
+public class ImRouterServiceImpl implements ImRouterService {
+
+    @DubboReference
+    private IRouterHandlerRpc routerHandlerRpc;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    /**
+     * 将从Redis中取出来的原来的im服务器的ip+端口后并存入RPC上下文，在自定义cluster中取出进行ip匹配，转发到原来的那台im服务器
+     */
+    @Override
+    public boolean sendMsg(Long userId, ImMsgBody imMsgBody) {
+        String bindAddress = stringRedisTemplate.opsForValue().get(ImCoreServerConstants.IM_BIND_IP_KEY + imMsgBody.getAppId() + ":" + imMsgBody.getUserId());
+        if (StringUtils.isEmpty(bindAddress)) {
+            return false;
+        }
+        RpcContext.getContext().set("ip", bindAddress);
+        routerHandlerRpc.sendMsg(imMsgBody);
+        return true;
+    }
+}
+```
+
+## 3.6 IM收到来自Router的精确转发后的处理
+
+**qiyu-live-im-core-server：**
+
+```java
+@DubboService
+public class RouterHandlerRpcImpl implements IRouterHandlerRpc {
+    
+    @Resource
+    private IRouterHandlerService routerHandlerService;
+    @Override
+    public void sendMsg(ImMsgBody imMsgBody) {
+        routerHandlerService.onReceive(imMsgBody);
+    }
+}
+```
+
+```java
+public interface IRouterHandlerService {
+
+
+    /**
+     * 当收到来自Router定向转发的业务服务的请求时，进行处理
+     */
+    void onReceive(ImMsgBody imMsgBody);
+}
+```
+
+收到来自Router定向转发的业务服务的请求时，进行处理：
+
+```java
+@Service
+public class RouterHandlerServiceImpl implements IRouterHandlerService {
+
+    @Override
+    public void onReceive(ImMsgBody imMsgBody) {
+        // 需要进行消息通知的userId
+        Long userId = imMsgBody.getUserId();
+        ChannelHandlerContext ctx = ChannelHandlerContextCache.get(userId);
+        //消息到达时，对应客户端未下线
+        if (ctx != null) {
+            ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_BIZ_MSG.getCode(), JSON.toJSONString(imMsgBody));
+            ctx.writeAndFlush(respMsg);
+        }
+    }
+}
+```
+
+## 3.7 业务包下游业务服务逻辑的实现
+
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+
+根据我们这张图，我们上面已经实现了im-server通过mq通知业务服务，实现了router定向转发到对应的im-server
+
+**但是还没有实现我们的业务服务msg-provider调用router**
+
+
+
+**qiyu-live-msg-interface：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+package org.qiyu.live.msg.provider.dto;
+
+import lombok.Data;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.util.Date;
+
+@Data
+public class MessageDTO implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1259190053670615404L;
+
+    /**
+     * 己方用户id（也是发送方用户id）
+     */
+    private Long userId;
+
+    /**
+     * 通信目标用户id
+     */
+    private Long objectId;
+
+    /**
+     * 消息类型
+     */
+    private Integer type;
+    /**
+     * 消息内容
+     */
+    private String content;
+    private Date createTime;
+    private Date updateTime;
+}
+```
+
+```java
+package org.qiyu.live.msg.provider.enums;
+
+public enum ImMsgBizCodeEum {
+    
+    LIVING_ROOM_IM_CHAT_MSG_BIZ(5555, "直播间im聊天消息");
+    
+    int code;
+    String desc;
+
+    ImMsgBizCodeEum(int code, String desc) {
+        this.code = code;
+        this.desc = desc;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getDesc() {
+        return desc;
+    }
+}
+```
+
+
+
+**qiyu-live-msg-provider：**
+
+```xml
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>fastjson</artifactId>
+    <version>${alibaba-fastjson.version}</version>
+    <exclusions>
+        <exclusion>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-router-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+@Component
+public class ImBizMsgKafkaConsumer {
+
+    @Resource
+    private MessageHandler singleMessageHandler;
+
+    @KafkaListener(topics = ImCoreServerProviderTopicNames.QIYU_LIVE_IM_BIZ_MSG_TOPIC, groupId = "im-send-biz-msg")
+    public void consumeImTopic(String msg) {
+        ImMsgBody imMsgBody = JSON.parseObject(msg, ImMsgBody.class);
+        singleMessageHandler.onMsgReceive(imMsgBody);
+    }
+}
+```
+
+```java
+package org.qiyu.live.msg.provider.kafka.handler;
+
+import org.qiyu.live.im.dto.ImMsgBody;
+
+public interface MessageHandler {
+    /**
+     * 处理im发送过来的业务消息包
+     */
+    void onMsgReceive(ImMsgBody imMsgBody);
+}
+```
+
+```java
+package org.qiyu.live.msg.provider.kafka.handler.impl;
+
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson2.JSON;
+import org.apache.dubbo.config.annotation.DubboReference;
+import org.qiyu.live.im.constants.AppIdEnum;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.qiyu.live.im.router.interfaces.ImRouterRpc;
+import org.qiyu.live.msg.provider.dto.MessageDTO;
+import org.qiyu.live.msg.provider.enums.ImMsgBizCodeEum;
+import org.qiyu.live.msg.provider.kafka.handler.MessageHandler;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SingleMessageHandlerImpl implements MessageHandler {
+    
+    @DubboReference
+    private ImRouterRpc routerRpc; 
+    
+    @Override
+    public void onMsgReceive(ImMsgBody imMsgBody) {
+        int bizCode = imMsgBody.getBizCode();
+        // 直播间的聊天消息
+        if (bizCode == ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
+            MessageDTO messageDTO = JSON.parseObject(imMsgBody.getData(), MessageDTO.class);
+            //还不是直播间业务，暂时不做过多的处理
+
+            ImMsgBody respMsgBody = new ImMsgBody();
+            //这里的userId设置的是objectId，因为是发送给对方客户端
+            respMsgBody.setUserId(messageDTO.getObjectId());
+            respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+            respMsgBody.setBizCode(ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("senderId", messageDTO.getUserId());
+            jsonObject.put("content", messageDTO.getContent());
+            respMsgBody.setData(jsonObject.toJSONString());
+            //将消息推送给router进行转发给im服务器
+            routerRpc.sendMsg(respMsgBody);
+        }
+    }
+}
+```
+
+## 3.8 编写客户端进行全链路测试
+
+**准备工作：**
+
+先将qiyu-live-im-core-server中的ClientHandler、LoginMsgHandler、LogoutMsgHandler、HeartBeatImMsgHandler、BizImMsgHandler中的LOGGER日志或控制台打印的所有的imMsg信息替换成他其中的imMsgBody的信息，否则二进制数据不方便观察数据
+
+```java
+// ClientHandler中
+System.out.println("【服务端响应数据】 result is " + new String(imMsg.getBody()));
+
+// 服务端四个handler中：
+LOGGER.error("body error, imMsgBody is {}", new String(imMsg.getBody()));
+```
+
+
+
+**修改ImClientHandler的代码：**
+
+```java
+@Service
+public class ImClientHandler implements InitializingBean {
+
+    @DubboReference
+    private ImTokenRpc imTokenRpc;
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                NioEventLoopGroup clientGroup = new NioEventLoopGroup();
+                Bootstrap bootstrap = new Bootstrap();
+                bootstrap.group(clientGroup);
+                bootstrap.channel(NioSocketChannel.class);
+                bootstrap.handler(new ChannelInitializer<>() {
+                    @Override
+                    protected void initChannel(Channel channel) throws Exception {
+                        System.out.println("初始化连接建立");
+                        channel.pipeline().addLast(new ImMsgEncoder());
+                        channel.pipeline().addLast(new ImMsgDecoder());
+                        channel.pipeline().addLast(new ClientHandler());
+                    }
+                });
+
+                // 测试代码段1：发送登录消息包，并持续直播间聊天
+                ChannelFuture channelFuture = null;
+                try {
+                    channelFuture = bootstrap.connect("localhost", 8085).sync();
+                    Channel channel = channelFuture.channel();
+                    Scanner scanner = new Scanner(System.in);
+                    System.out.print("请输入userId：");
+                    Long userId = scanner.nextLong();
+                    System.out.print("\n请输入objectId：");
+                    Long objectId = scanner.nextLong();
+                    String token = imTokenRpc.createImLoginToken(userId, AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                    // 发送登录消息包
+                    ImMsgBody imMsgBody = new ImMsgBody();
+                    imMsgBody.setUserId(userId);
+                    imMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                    imMsgBody.setToken(token);
+                    channel.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(imMsgBody)));
+                    // 心跳包机制
+                    sendHeartBeat(userId, channel);
+                    // 直播间持续聊天
+                    while (true) {
+                        System.out.println("请输入聊天内容：");
+                        String content = scanner.nextLine();
+                        ImMsgBody bizBody = new ImMsgBody();
+                        bizBody.setUserId(userId);
+                        bizBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                        bizBody.setBizCode(5555);
+                        JSONObject jsonObject = new JSONObject();
+                        jsonObject.put("userId", userId);
+                        jsonObject.put("objectId", objectId);
+                        jsonObject.put("content", content);
+                        bizBody.setData(JSON.toJSONString(jsonObject));
+                        ImMsg bizMsg = ImMsg.build(ImMsgCodeEnum.IM_BIZ_MSG.getCode(), JSON.toJSONString(bizBody));
+                        channel.writeAndFlush(bizMsg);
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }).start();
+    }
+    private void sendHeartBeat(Long userId, Channel channel) {
+        new Thread(() -> {
+            while (true) {
+                try {
+                    //每隔30秒发送心跳包
+                    Thread.sleep(30000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                ImMsgBody imMsgBody = new ImMsgBody();
+                imMsgBody.setUserId(userId);
+                imMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                ImMsg heartBeatMsg = ImMsg.build(ImMsgCodeEnum.IM_HEARTBEAT_MSG.getCode(), JSON.toJSONString(imMsgBody));
+                channel.writeAndFlush(heartBeatMsg);
+            }
+        }).start();
+    }
+}
+```
+
+测试启动顺序：ImProviderApplication --> ImCoreServerApplication --> MsgProviderApplication --> ImRouterProviderApplication --> 拷贝ImClientApplication，启动两个客户端
+
+输入测试数据：
+
+![image-20240216012602543](image/2-即时通讯(IM)系统的实现.assets/image-20240216012602543.png)
+
+出现此界面的效果即为成功
+
+> 到这里，我们的下图中IM系统的在线推送模型的基本功能骨架与全链路算是实现，接下来，我们就是要在全链路上进行功能的完善
+>
+> ![image-20240211231604405](image/2-即时通讯(IM)系统的实现.assets/image-20240211231604405.png)
+
+
+
+
+
+
+
+
 
 
 

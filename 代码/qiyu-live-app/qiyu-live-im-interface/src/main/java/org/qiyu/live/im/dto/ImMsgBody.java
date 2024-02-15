@@ -25,6 +25,10 @@ public class ImMsgBody implements Serializable {
      */
     private String token;
     /**
+     * 业务类型标识
+     */
+    private int bizCode;
+    /**
      * 和业务服务进行消息传递
      */
     private String data;

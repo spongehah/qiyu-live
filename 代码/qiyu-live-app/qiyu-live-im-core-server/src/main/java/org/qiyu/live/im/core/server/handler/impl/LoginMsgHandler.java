@@ -3,18 +3,24 @@ package org.qiyu.live.im.core.server.handler.impl;
 import com.alibaba.fastjson.JSON;
 import io.micrometer.common.util.StringUtils;
 import io.netty.channel.ChannelHandlerContext;
+import jakarta.annotation.Resource;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.im.constants.AppIdEnum;
+import org.qiyu.live.im.constants.ImConstants;
 import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
 import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.qiyu.live.im.core.server.interfaces.constants.ImCoreServerConstants;
 import org.qiyu.live.im.dto.ImMsgBody;
 import org.qiyu.live.im.interfaces.ImTokenRpc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * 登录消息处理器
@@ -26,6 +32,8 @@ public class LoginMsgHandler implements SimpleHandler {
 
     @DubboReference
     private ImTokenRpc imTokenRpc;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 想要建立连接的话，我们需要进行一系列的参数校验，
@@ -40,16 +48,17 @@ public class LoginMsgHandler implements SimpleHandler {
         byte[] body = imMsg.getBody();
         if (body == null || body.length == 0) {
             ctx.close();
-            LOGGER.error("body error, imMsg is {}", imMsg);
+            LOGGER.error("body error, imMsgBody is {}", new String(imMsg.getBody()));
             throw new IllegalArgumentException("body error");
         }
         ImMsgBody imMsgBody = JSON.parseObject(new String(body), ImMsgBody.class);
         String token = imMsgBody.getToken();
         Long userIdFromMsg = imMsgBody.getUserId();
         Integer appId = imMsgBody.getAppId();
+        System.out.println(imMsgBody);
         if (StringUtils.isEmpty(token) || userIdFromMsg < 10000 || appId < 10000) {
             ctx.close();
-            LOGGER.error("param error, imMsg is {}", imMsg);
+            LOGGER.error("param error, imMsgBody is {}", new String(imMsg.getBody()));
             throw new IllegalArgumentException("param error");
         }
         Long userId = imTokenRpc.getUserIdByToken(token);
@@ -66,13 +75,17 @@ public class LoginMsgHandler implements SimpleHandler {
             respBody.setUserId(userId);
             respBody.setData("true");
             ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(respBody));
+            // 将im服务器的ip+端口地址保存到Redis，以供Router服务取出进行转发
+            stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
+                    ChannelHandlerContextCache.getServerIpAddress(),
+                    2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
             LOGGER.info("[LoginMsgHandler] login success, userId is {}, appId is {}", userId, appId);
             ctx.writeAndFlush(imMsg);
             return;
         }
         // 不允许建立连接
         ctx.close();
-        LOGGER.error("token error, imMsg is {}", imMsg);
+        LOGGER.error("token error, imMsgBody is {}", new String(imMsg.getBody()));
         throw new IllegalArgumentException("token error");
     }
 }

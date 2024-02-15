@@ -9,6 +9,6 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         ImMsg imMsg = (ImMsg) msg;
-        System.out.println("【服务端响应数据】 result is " + imMsg);
+        System.out.println("【服务端响应数据】 result is " + new String(imMsg.getBody()));
     }
 }

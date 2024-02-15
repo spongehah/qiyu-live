@@ -1,6 +1,8 @@
 package org.qiyu.live.im.router.provider.service;
 
+import org.qiyu.live.im.dto.ImMsgBody;
+
 public interface ImRouterService {
 
-    boolean sendMsg(Long userId, String msgJson);
+    boolean sendMsg(ImMsgBody imMsgBody);
 }

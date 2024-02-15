@@ -9,6 +9,7 @@ import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.qiyu.live.im.core.server.interfaces.constants.ImCoreServerConstants;
 import org.qiyu.live.im.dto.ImMsgBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,7 @@ public class HeartBeatImMsgHandler implements SimpleHandler {
         Long userId = ImContextUtils.getUserId(ctx);
         Integer appId = ImContextUtils.getAppId(ctx);
         if (userId == null || appId == null) {
-            LOGGER.error("attr error, imMsg is {}", imMsg);
+            LOGGER.error("attr error, imMsgBody is {}", new String(imMsg.getBody()));
             // 有可能是错误的消息包导致，直接放弃连接
             ctx.close();
             throw new IllegalArgumentException("attr error");
@@ -45,6 +46,8 @@ public class HeartBeatImMsgHandler implements SimpleHandler {
         this.recordOnlineTime(userId, redisKey);
         this.removeExpireRecord(redisKey);
         redisTemplate.expire(redisKey, 5L, TimeUnit.MINUTES);
+        // 将以供Router服务取出进行转发的im服务器的ip+端口地址进行延时
+        redisTemplate.expire(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId, 2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
         //回写给客户端
         ImMsgBody respBody = new ImMsgBody();
         respBody.setUserId(userId);
