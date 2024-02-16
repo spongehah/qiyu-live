@@ -4,8 +4,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import jakarta.annotation.Resource;
-import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
-import org.qiyu.live.im.core.server.common.ImContextAttr;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.impl.LogoutMsgHandler;
 import org.springframework.stereotype.Component;
@@ -34,8 +33,9 @@ public class ImServerCoreHandler extends SimpleChannelInboundHandler {
      * @throws Exception
      */
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        Long userId = ctx.attr(ImContextAttr.USER_ID).get();
-        ChannelHandlerContextCache.remove(userId);
+    public void channelInactive(ChannelHandlerContext ctx) {
+        Long userId = ImContextUtils.getUserId(ctx);
+        int appId = ImContextUtils.getAppId(ctx);
+        logoutMsgHandler.handlerLogout(userId, appId);
     }
 }

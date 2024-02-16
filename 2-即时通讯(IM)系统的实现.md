@@ -869,6 +869,7 @@ public class ImServerCoreHandler extends SimpleChannelInboundHandler {
 > 2. 登出消息包：正常断开im连接时发送的
 > 3. 业务消息包：最常用的消息类型，例如我们的im收发数据
 > 4. 心跳消息包：定时给im发送心跳包
+> 4. ACK消息包：来自客户端回应的ACK包（3.10再实现）
 >
 > 所以我们使用**策略模式**，来定义不同消息包的处理方式
 >
@@ -2857,7 +2858,7 @@ public class ImRouterProviderApplication implements CommandLineRunner {
 //将启动时im服务器的ip和端口记录下来，用于Router模块转发时使用
 //添加启动参数：
 // -DDUBBO_IP_TO_REGISTRY=192.168.101.104  (启动服务的机器的ip地址)
-// -DDUBBO_PORT_TO_REGISTRY=9096
+// -DDUBBO_PORT_TO_REGISTRY=9095
 //注意VM参数添加的是-D参数，前面是两个D，后面获取property时只有一个D
 try {
     String registryIp = InetAddress.getLocalHost().getHostAddress();
@@ -3264,7 +3265,7 @@ public class ImClientHandler implements InitializingBean {
 }
 ```
 
-测试启动顺序：ImProviderApplication --> ImCoreServerApplication --> MsgProviderApplication --> ImRouterProviderApplication --> 拷贝ImClientApplication，启动两个客户端
+测试启动顺序：ImProviderApplication --> ImCoreServerApplication -->  ImRouterProviderApplication --> MsgProviderApplication --> 拷贝ImClientApplication，启动两个客户端
 
 输入测试数据：
 
@@ -3275,6 +3276,515 @@ public class ImClientHandler implements InitializingBean {
 > 到这里，我们的下图中IM系统的在线推送模型的基本功能骨架与全链路算是实现，接下来，我们就是要在全链路上进行功能的完善
 >
 > ![image-20240211231604405](image/2-即时通讯(IM)系统的实现.assets/image-20240211231604405.png)
+
+## 3.9 用户在线检测功能的开发
+
+**准备工作：**
+
+先将前面的代码完善一下：
+
+LogoutMsgHandler：将以下三行代码单独抽出为一个方法：
+
+```java
+//原位置进行调用：
+handlerLogout(userId, appId);
+
+public void handlerLogout(Long userId, Integer appId) {
+    // 理想情况下：客户端短线的时候发送短线消息包
+    ChannelHandlerContextCache.remove(userId);
+    // 删除供Router取出的存在Redis的IM服务器的ip+端口地址
+    stringRedisTemplate.delete(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId);
+    // 删除心跳包存活缓存
+    stringRedisTemplate.delete(cacheKeyBuilder.buildImLoginTokenKey(userId, appId));
+}
+```
+
+ImServerCoreHandler：im服务的核心handler中，修改异常掉线的处理逻辑
+
+```java
+@Resource
+private LogoutMsgHandler logoutMsgHandler;
+
+/**
+ * 客户端正常或意外掉线，都会触发这里
+ * @param ctx
+ * @throws Exception
+ */
+@Override
+public void channelInactive(ChannelHandlerContext ctx) {
+    Long userId = ImContextUtils.getUserId(ctx);
+    int appId = ImContextUtils.getAppId(ctx);
+    logoutMsgHandler.handlerLogout(userId, appId);
+}
+```
+
+
+
+下面进行用户在线检测功能的实现：
+
+**qiyu-live-im-interface：**
+
+```java
+package org.qiyu.live.im.interfaces;
+
+/**
+ * 判断用户是否在线的RPC
+ */
+public interface ImOnlineRpc {
+
+    /**
+     * 判断对应业务的userId的主机是否在线
+     */
+    boolean isOnline(Long userId, int appId);
+}
+```
+
+
+
+**qiyu-live-im-provider：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-core-server-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+package org.qiyu.live.im.provider.rpc;
+
+import jakarta.annotation.Resource;
+import org.apache.dubbo.config.annotation.DubboService;
+import org.qiyu.live.im.interfaces.ImOnlineRpc;
+import org.qiyu.live.im.provider.service.ImOnlineService;
+
+@DubboService
+public class ImOnlineRpcImpl implements ImOnlineRpc {
+    
+    @Resource
+    private ImOnlineService imOnlineService;
+    
+    @Override
+    public boolean isOnline(Long userId, int appId) {
+        return imOnlineService.isOnline(userId, appId);
+    }
+}
+```
+
+```java
+package org.qiyu.live.im.provider.service;
+
+public interface ImOnlineService {
+
+    /**
+     * 判断对应业务的userId的主机是否在线
+     */
+    boolean isOnline(Long userId, int appId);
+}
+```
+
+```java
+package org.qiyu.live.im.provider.service.impl;
+
+import jakarta.annotation.Resource;
+import org.qiyu.live.im.core.server.interfaces.constants.ImCoreServerConstants;
+import org.qiyu.live.im.provider.service.ImOnlineService;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ImOnlineServiceImpl implements ImOnlineService {
+    
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    
+    @Override
+    public boolean isOnline(Long userId, int appId) {
+        //判断Redis中有有无对应的im服务器的启动ip地址的缓存（也可以判断Redis中是否有心跳包）
+        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId));
+    }
+}
+```
+
+在Redis中添加一条数据1001，进行测试：结果是只有第一个是true
+
+```java
+@Resource
+private ImOnlineService imOnlineService;
+
+@Override
+public void run(String... args) throws Exception {
+    for(int i = 0; i < 10; i++) {
+        System.out.println(imOnlineService.isOnline(1001L + i, AppIdEnum.QIYU_LIVE_BIZ.getCode()));
+    }
+}
+```
+
+## 3.10 处理客户端的ACK消息
+
+**qiyu-live-im-interface：**
+
+ImMsgBody添加以下字段：
+
+```java
+/**
+ * 唯一的消息id标识
+ */
+private String msgId;
+```
+
+ImMsgCodeEnum添加以下枚举：
+
+```java
+IM_ACK_MSG(1005, "im服务的ACK消息包");
+```
+
+**qiyu-live-framework-redis-starter：**
+
+ImCoreServerProviderCacheKeyBuilder中添加新的keybuilder
+
+```java
+@Configuration
+@Conditional(RedisKeyLoadMatch.class)
+public class ImCoreServerProviderCacheKeyBuilder extends RedisKeyBuilder {
+
+    private static String IM_ONLINE_ZSET = "imOnlineZset";
+    private static String IM_ACK_MAP = "imAckMap";
+    private static String IM_ACK_MSG_ID = "imAckMsgId";
+
+    public String buildImAckMapKey(Long userId,Integer appId) {
+        return super.getPrefix() + IM_ACK_MAP + super.getSplitItem() + appId + super.getSplitItem() + userId % 100;
+    }
+
+    /**
+     * 按照用户id取模10000，得出具体缓存所在的key
+     *
+     * @param userId
+     * @return
+     */
+    public String buildImLoginTokenKey(Long userId, Integer appId) {
+        return super.getPrefix() + IM_ONLINE_ZSET + super.getSplitItem() + appId + super.getSplitItem() + userId % 10000;
+    }
+    
+    public String buildImAckMsgIdKey() {
+        return IM_ACK_MSG_ID;
+    }
+}
+```
+
+
+
+开始完成im server的处理ACK消息的逻辑：
+
+![image-20240211235041473](image/2-即时通讯(IM)系统的实现.assets/image-20240211235041473.png)
+
+**qiyu-live-im-core-server：**
+
+```java
+package org.qiyu.live.im.core.server.service;
+
+import org.qiyu.live.im.dto.ImMsgBody;
+
+public interface IMsgAckCheckService {
+
+    /**
+     * 主要是客户端发送ack包给到服务端后，调用进行ack记录的移除
+     */
+    void doMsgAck(ImMsgBody imMsgBody);
+
+    /**
+     * 往Redis中记录下还未收到的消息的ack和已经重试的次数times
+     */
+    void recordMsgAck(ImMsgBody imMsgBody, int times);
+
+    /**
+     * 发送延迟消息，用于进行消息重试功能 
+     */
+    void sendDelayMsg(ImMsgBody imMsgBody);
+
+    /**
+     * 获取ack消息的重试次数
+     */
+    int getMsgAckTimes(String msgId, Long userId, int appId);
+}
+```
+
+处理ACK消息与Redis之间的service api，供其它部分调用：
+
+```java
+package org.qiyu.live.im.core.server.service.impl;
+
+import com.alibaba.fastjson.JSON;
+import jakarta.annotation.Resource;
+import org.idea.qiyu.live.framework.redis.starter.id.RedisSeqIdHelper;
+import org.idea.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.qiyu.live.im.core.server.service.IMsgAckCheckService;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
+
+@Service
+public class IMsgAckCheckServiceImpl implements IMsgAckCheckService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(IMsgAckCheckServiceImpl.class);
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    @Resource
+    private ImCoreServerProviderCacheKeyBuilder cacheKeyBuilder;
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Override
+    public void doMsgAck(ImMsgBody imMsgBody) {
+        // 删除唯一标识的msgId对应的key-value键值对，代表该消息已经被客户端确认
+        String key = cacheKeyBuilder.buildImAckMapKey(imMsgBody.getUserId(), imMsgBody.getAppId());
+        redisTemplate.opsForHash().delete(key, imMsgBody.getMsgId());
+    }
+
+    @Override
+    public void recordMsgAck(ImMsgBody imMsgBody, int times) {
+        // 记录未被确认的消息id以及重试次数
+        redisTemplate.opsForHash().put(cacheKeyBuilder.buildImAckMapKey(imMsgBody.getUserId(), imMsgBody.getAppId()), imMsgBody.getMsgId(), times);
+    }
+
+    @Override
+    public void sendDelayMsg(ImMsgBody imMsgBody) {
+        String json = JSON.toJSONString(imMsgBody);
+        CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(ImCoreServerProviderTopicNames.QIYU_LIVE_IM_ACK_MSG_TOPIC, json);
+        sendResult.whenComplete((v, e) -> {
+            if (e != null) {
+                LOGGER.info("[IMsgAckCheckServiceImpl] msg is {}, sendResult is {}", json, v);
+            }
+        }).exceptionally(e -> {
+            LOGGER.error("[IMsgAckCheckServiceImpl] ack msg send error, error is ", e);
+            return null;
+        });
+    }
+
+    @Override
+    public int getMsgAckTimes(String msgId, Long userId, int appId) {
+        Object times = redisTemplate.opsForHash().get(cacheKeyBuilder.buildImAckMapKey(userId, appId), msgId);
+        if (times == null) {
+            return -1;
+        }
+        return (int) times;
+    }
+}
+```
+
+修改RouterHandlerServiceImpl类：**发送消息给客户端B后，保存未确认的消息到Redis，并发送延迟消息**：
+
+```java
+@Service
+public class RouterHandlerServiceImpl implements IRouterHandlerService {
+    
+    @Resource
+    private IMsgAckCheckService iMsgAckCheckService;
+    @Resource
+    private ImCoreServerProviderCacheKeyBuilder cacheKeyBuilder;
+    @Resource
+    private RedisSeqIdHelper redisSeqIdHelper;
+
+    @Override
+    public void onReceive(ImMsgBody imMsgBody) {
+        // 设置消息的唯一标识msgId
+        Long msgId = redisSeqIdHelper.nextId(cacheKeyBuilder.buildImAckMsgIdKey());
+        imMsgBody.setMsgId(String.valueOf(msgId));
+        if (sendMsgToClient(imMsgBody)) {
+            //收到相应给客户端B的数据时，记录下客户端B还未发送ACK的消息(第一次记录)
+            iMsgAckCheckService.recordMsgAck(imMsgBody, 1);
+            //发送延时消息，进行未接收到消息的重复消费
+            iMsgAckCheckService.sendDelayMsg(imMsgBody);
+        }
+    }
+
+    /**
+     * 对发送消息给客户端做一下封装，方便外界只调用这部分代码
+     */
+    @Override
+    public boolean sendMsgToClient(ImMsgBody imMsgBody) {
+        // 需要进行消息通知的userId
+        Long userId = imMsgBody.getUserId();
+        ChannelHandlerContext ctx = ChannelHandlerContextCache.get(userId);
+        // 消息到达时，对应客户端未下线
+        if (ctx != null) {
+            ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_BIZ_MSG.getCode(), JSON.toJSONString(imMsgBody));
+            //给目标客户端回写消息
+            ctx.writeAndFlush(respMsg);
+            return true;
+        }
+        return false;
+    }
+}
+```
+
+编写AckImMsgHandler，**实现处理接收来自客户端的ACK消息包，接收后删除对应消息在Redis中的缓存(doMsgAck)：**
+
+```java
+package org.qiyu.live.im.core.server.handler.impl;
+
+import com.alibaba.fastjson2.JSON;
+import io.netty.channel.ChannelHandlerContext;
+import jakarta.annotation.Resource;
+import org.qiyu.live.im.core.server.common.ImContextUtils;
+import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.qiyu.live.im.core.server.service.IMsgAckCheckService;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+/**
+ * 确认消息处理器
+ */
+@Component
+public class AckImMsgHandler implements SimpleHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AckImMsgHandler.class);
+    
+    @Resource
+    private IMsgAckCheckService iMsgAckCheckService;
+
+    @Override
+    public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
+        Long userId = ImContextUtils.getUserId(ctx);
+        Integer appId = ImContextUtils.getAppId(ctx);
+        if (userId == null || appId == null) {
+            LOGGER.error("attr error, imMsgBody is {}", new String(imMsg.getBody()));
+            // 有可能是错误的消息包导致，直接放弃连接
+            ctx.close();
+            throw new IllegalArgumentException("attr error");
+        }
+        //收到ACK消息，删除未确认消息记录
+        iMsgAckCheckService.doMsgAck(JSON.parseObject(new String(imMsg.getBody()), ImMsgBody.class));
+    }
+}
+```
+
+在ImHandlerFactoryImpl工厂实现类中，添加AckImMsgHandler的单例缓存：
+
+```java
+simpleHandlerMap.put(ImMsgCodeEnum.IM_ACK_MSG.getCode(), applicationContext.getBean(AckImMsgHandler.class));
+```
+
+编写延迟消息的kafka消费者处理类：**会判断ACK消息是否已经接收（就是判断redis中是否还有对应的消息记录），若ACK还未被接收，则再次重发消息**
+
+```java
+package org.qiyu.live.im.core.server.kafka;
+
+import com.alibaba.fastjson.JSON;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.qiyu.live.im.core.server.service.IMsgAckCheckService;
+import org.qiyu.live.im.core.server.service.IRouterHandlerService;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.*;
+
+@Component
+public class ImAckConsumer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ImAckConsumer.class);
+    @Resource
+    private IMsgAckCheckService msgAckCheckService;
+    @Resource
+    private IRouterHandlerService routerHandlerService;
+    private static final DelayQueue<DelayedTask> DELAY_QUEUE = new DelayQueue<>();
+
+    private static final ExecutorService DELAY_QUEUE_THREAD_POOL = new ThreadPoolExecutor(
+            3, 10,
+            10L, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(100)
+    );
+
+    @PostConstruct()
+    private void init() {
+        DELAY_QUEUE_THREAD_POOL.submit(() -> {
+            while (true) {
+                try {
+                    DelayedTask task = DELAY_QUEUE.take();
+                    task.execute();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, "Thread-im-ack-msg-retry");
+    }
+
+    @KafkaListener(topics = ImCoreServerProviderTopicNames.QIYU_LIVE_IM_ACK_MSG_TOPIC, groupId = "im-ack-msg-retry")
+    public void consumeAckMsg(String imMsgBodyJson, Acknowledgment ack) {
+        ImMsgBody imMsgBody = JSON.parseObject(imMsgBodyJson, ImMsgBody.class);
+
+        DELAY_QUEUE.offer(new DelayedTask(4000, () -> {
+            int retryTimes = msgAckCheckService.getMsgAckTimes(imMsgBody.getMsgId(), imMsgBody.getUserId(), imMsgBody.getAppId());
+            LOGGER.info("[ImAckConsumer]retryTimes is {}, msgId is {}", retryTimes, imMsgBody.getMsgId());
+            // 返回-1代表Redis中已经没有对应记录，代表ACK消息已经收到了
+            if (retryTimes < 0) {
+                return;
+            }
+            // 只支持一次重发
+            if (retryTimes < 2) {
+                // 发送消息给客户端
+                routerHandlerService.sendMsgToClient(imMsgBody);
+                // 再次记录未收到ack的消息记录，time加1
+                msgAckCheckService.recordMsgAck(imMsgBody, retryTimes + 1);
+                // 再次重发消息
+                msgAckCheckService.sendDelayMsg(imMsgBody);
+                LOGGER.info("[ImAckConsumer]DelayQueue重发了一次消息");
+            } else {
+                // 已经执行过一次重发，不再重试，直接删除
+                msgAckCheckService.doMsgAck(imMsgBody);
+            }
+            //手动提交
+            ack.acknowledge();
+            LOGGER.info("[ImAckConsumer] Kafka手动提交了offset，msg is {}", imMsgBody);
+        }));
+    }
+}
+```
+
+
+
+**测试：**
+
+在3.8 测试的基础上，修改ClientHandler代码，实现接收im server的数据后，发回ACK消息
+
+```java
+public class ClientHandler extends ChannelInboundHandlerAdapter {
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        ImMsg imMsg = (ImMsg) msg;
+        if (imMsg.getCode() == ImMsgCodeEnum.IM_BIZ_MSG.getCode()) {
+            //是业务消息，就要发回ACK
+            ImMsgBody imMsgBody = JSON.parseObject(new String(imMsg.getBody()), ImMsgBody.class);
+            ImMsgBody ackBody = new ImMsgBody();
+            ackBody.setUserId(imMsgBody.getUserId());
+            ackBody.setAppId(imMsgBody.getAppId());
+            ackBody.setMsgId(imMsgBody.getMsgId());
+            ImMsg ackMsg = ImMsg.build(ImMsgCodeEnum.IM_ACK_MSG.getCode(), JSON.toJSONString(ackBody));
+            ctx.writeAndFlush(ackMsg);
+        }
+        System.out.println("【服务端响应数据】 result is " + new String(imMsg.getBody()));
+    }
+}
+```
+
+
 
 
 

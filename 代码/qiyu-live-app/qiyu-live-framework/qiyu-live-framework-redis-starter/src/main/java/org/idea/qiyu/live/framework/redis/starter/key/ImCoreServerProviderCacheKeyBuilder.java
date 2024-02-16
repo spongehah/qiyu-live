@@ -9,6 +9,7 @@ public class ImCoreServerProviderCacheKeyBuilder extends RedisKeyBuilder {
 
     private static String IM_ONLINE_ZSET = "imOnlineZset";
     private static String IM_ACK_MAP = "imAckMap";
+    private static String IM_ACK_MSG_ID = "imAckMsgId";
 
     public String buildImAckMapKey(Long userId,Integer appId) {
         return super.getPrefix() + IM_ACK_MAP + super.getSplitItem() + appId + super.getSplitItem() + userId % 100;
@@ -23,5 +24,8 @@ public class ImCoreServerProviderCacheKeyBuilder extends RedisKeyBuilder {
     public String buildImLoginTokenKey(Long userId, Integer appId) {
         return super.getPrefix() + IM_ONLINE_ZSET + super.getSplitItem() + appId + super.getSplitItem() + userId % 10000;
     }
-
+    
+    public String buildImAckMsgIdKey() {
+        return IM_ACK_MSG_ID;
+    }
 }

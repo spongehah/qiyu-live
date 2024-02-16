@@ -13,6 +13,10 @@ public class ImMsgBody implements Serializable {
     @Serial
     private static final long serialVersionUID = -7657602083071950966L;
     /**
+     * 唯一的消息id标识
+     */
+    private String msgId;
+    /**
      * 接入im服务的各个业务线id
      */
     private int appId;

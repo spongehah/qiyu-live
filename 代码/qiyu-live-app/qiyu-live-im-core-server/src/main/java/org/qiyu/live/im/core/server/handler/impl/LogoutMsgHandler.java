@@ -48,14 +48,18 @@ public class LogoutMsgHandler implements SimpleHandler {
         respBody.setData("true");
         ctx.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGOUT_MSG.getCode(), JSON.toJSONString(respBody)));
         LOGGER.info("[LogoutMsgHandler] logout success, userId is {}, appId is {}", userId, appId);
+        handlerLogout(userId, appId);
+        ImContextUtils.removeUserId(ctx);
+        ImContextUtils.removeAppId(ctx);
+        ctx.close();
+    }
+
+    public void handlerLogout(Long userId, Integer appId) {
         // 理想情况下：客户端短线的时候发送短线消息包
         ChannelHandlerContextCache.remove(userId);
         // 删除供Router取出的存在Redis的IM服务器的ip+端口地址
         stringRedisTemplate.delete(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId);
         // 删除心跳包存活缓存
         stringRedisTemplate.delete(cacheKeyBuilder.buildImLoginTokenKey(userId, appId));
-        ImContextUtils.removeUserId(ctx);
-        ImContextUtils.removeAppId(ctx);
-        ctx.close();
     }
 }

@@ -1,6 +1,10 @@
 package org.qiyu.live.im.provider;
 
+import jakarta.annotation.Resource;
 import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+import org.qiyu.live.im.constants.AppIdEnum;
+import org.qiyu.live.im.provider.service.ImOnlineService;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
