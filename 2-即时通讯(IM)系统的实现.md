@@ -3784,6 +3784,636 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 }
 ```
 
+测试启动顺序：ImProviderApplication --> ImCoreServerApplication -->  ImRouterProviderApplication --> MsgProviderApplication --> ImClientApplication
+
+在ImClientApplication输入两次100001与自己通话
+
+理想测试结果：
+
+![image-20240217222230149](image/2-即时通讯(IM)系统的实现.assets/image-20240217222230149.png)
+
+如果超时未删除Redis中的缓存，客户端可能会出现重复的相同消息
+
+#  4 IM系统前端的整合
+
+## 4.1 开播按钮的显示
+
+先在本地MySQL中找一个数据库创建两张表：（不用创建分表）
+
+```sql
+# 正在直播的直播间表
+CREATE TABLE `t_living_room` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `anchor_id` bigint DEFAULT NULL COMMENT '主播id',
+  `type` tinyint NOT NULL DEFAULT '0' COMMENT '直播间类型（1普通直播间，2pk直播间）',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '状态（0无效1有效）',
+  `room_name` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'EMPTY_STR' COMMENT '直播间名称',
+  `covert_img` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '直播间封面',
+  `watch_num` int DEFAULT '0' COMMENT '观看数量',
+  `good_num` int DEFAULT '0' COMMENT '点赞数量',
+  `start_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '开播时间',
+  `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+# 历史直播记录
+-- Create syntax for TABLE 't_living_room_record'
+CREATE TABLE `t_living_room_record` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `anchor_id` bigint DEFAULT NULL COMMENT '主播id',
+  `type` tinyint NOT NULL DEFAULT '0' COMMENT '直播间类型（0默认类型）',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '状态（0无效1有效）',
+  `room_name` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'EMPTY_STR' COMMENT '直播间名称',
+  `covert_img` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '直播间封面',
+  `watch_num` int DEFAULT '0' COMMENT '观看数量',
+  `good_num` int DEFAULT '0' COMMENT '点赞数量', 
+  `start_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '开播时间',
+  `end_time` datetime DEFAULT NULL COMMENT '关播时间',
+  `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+```
+
+
+
+**qiyu-live-api：**
+
+```java
+@Data
+public class HomePageVO {
+
+    private boolean loginStatus;
+    private long userId;
+    private String nickName;
+    private String avatar;
+    //是否是主播身份
+    private boolean showStartLivingBtn;
+}
+```
+
+```java
+@RestController
+@RequestMapping("/home")
+public class HomePageController {
+    @Resource
+    private IHomePageService homePageService;
+
+    @PostMapping("/initPage")
+    public WebResponseVO initPage() {
+        Long userId = QiyuRequestContext.getUserId();
+        HomePageVO homePageVO = new HomePageVO();
+        homePageVO.setLoginStatus(false);
+        if (userId != null) {
+            homePageVO = homePageService.initPage(userId);
+            homePageVO.setLoginStatus(true);
+        }
+        return WebResponseVO.success(homePageVO);
+    }
+}
+```
+
+```java
+public interface IHomePageService {
+
+
+    HomePageVO initPage(Long userId);
+}
+```
+
+```java
+@Service
+public class IHomePageServiceImpl implements IHomePageService {
+
+    @DubboReference
+    private IUserRpc userRpc;
+    @DubboReference
+    private IUserTagRpc userTagRpc;
+
+    @Override
+    public HomePageVO initPage(Long userId) {
+        UserDTO userDTO = userRpc.getUserById(userId);
+        System.out.println(userDTO);
+        HomePageVO homePageVO = new HomePageVO();
+        homePageVO.setLoginStatus(false);
+        if (userId != null) {
+            homePageVO.setAvatar(userDTO.getAvatar());
+            homePageVO.setUserId(userDTO.getUserId());
+            homePageVO.setNickName(userDTO.getNickName());
+            //VIP用户才能开播
+            homePageVO.setShowStartLivingBtn(userTagRpc.containTag(userId, UserTagsEnum.IS_VIP));
+        }
+        return homePageVO;
+    }
+}
+```
+
+## 4.2 点击开播前往直播页以及关播
+
+**qiyu-live-living-interface：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-common-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+/**
+ * 直播间相关请求DTO
+ */
+@Data
+public class LivingRoomReqDTO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = -4370401310595190339L;
+    private Integer id;
+    private Long anchorId;
+    private Long pkObjId;
+    private String roomName;
+    private Integer roomId;
+    private String covertImg;
+    private Integer type;
+    private Integer appId;
+    private int page;
+    private int pageSize;
+}
+```
+
+```java
+/**
+ * 直播间相关请求回应DTO
+ */
+@Data
+public class LivingRoomRespDTO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = -4370402310595190339L;
+    private Integer id;
+    private Long anchorId;
+    private String roomName;
+    private String covertImg;
+    private Integer type;
+    private Integer watchNum;
+    private Integer goodNum;
+    private Long pkObjId;
+}
+```
+
+```java
+public interface ILivingRoomRpc {
+
+    /**
+     * 开启直播间
+     *
+     * @param livingRoomReqDTO
+     * @return
+     */
+    Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 关闭直播间
+     *
+     * @param livingRoomReqDTO
+     * @return
+     */
+    boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO);
+    
+    /**
+     * 根据用户id查询是否正在开播
+     *
+     * @param roomId
+     * @return
+     */
+    LivingRoomRespDTO queryByRoomId(Integer roomId);
+}
+```
+
+
+
+**qiyu-live-living-provider：**
+
+```xml
+<dependency>
+    <groupId>org.apache.dubbo</groupId>
+    <artifactId>dubbo-spring-boot-starter</artifactId>
+    <version>3.2.0-beta.3</version>
+</dependency>
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+<!--在SpringBoot 2.4.x的版本之后，对于bootstrap.properties/bootstrap.yaml配置文件(我们合起来成为Bootstrap配置文件)的支持，需要导入该jar包-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+    <version>3.0.2</version>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <exclusions>
+        <exclusion>
+            <artifactId>log4j-to-slf4j</artifactId>
+            <groupId>org.apache.logging.log4j</groupId>
+        </exclusion>
+    </exclusions>
+</dependency>
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <version>${qiyu-mysql.version}</version>
+</dependency>
+<dependency>
+    <groupId>com.baomidou</groupId>
+    <artifactId>mybatis-plus-boot-starter</artifactId>
+    <version>${mybatis-plus.version}</version>
+</dependency>
+
+<!--下面都是自定义组件或starter-->
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-common-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-living-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+bootstrap.yml：
+
+```yaml
+spring:
+  application:
+    name: qiyu-live-living-provider
+  cloud:
+    nacos:
+      username: qiyu
+      password: qiyu
+      discovery:
+        server-addr: nacos.server:8848
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+      config:
+        import-check:
+          enabled: false
+        # 当前服务启动后去nacos中读取配置文件的后缀
+        file-extension: yml
+        # 读取配置的nacos地址
+        server-addr: nacos.server:8848
+        # 读取配置的nacos的名空间
+        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        group: DEFAULT_GROUP
+  config:
+    import:
+      - optional:nacos:${spring.application.name}.yml
+```
+
+Nacos创建qiyu-live-living-provider.yml：
+
+```yaml
+spring:
+  application:
+    name: qiyu-live-living-provider
+  datasource:
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 200
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    #访问主库
+    url: jdbc:mysql://localhost:3306/qiyu_live_user?useUnicode=true&characterEncoding=utf8
+    username: root
+    password: 123456
+
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+  registry:
+    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+  protocol:
+    name: dubbo
+    port: 9098
+    threadpool: fixed
+    dispatcher: execution
+    threads: 500
+    accepts: 500
+```
+
+复制logback-spring.xml
+
+```java
+@SpringBootApplication
+@EnableDubbo
+@EnableDiscoveryClient
+public class LivingProviderApplication {
+
+    public static void main(String[] args) throws InterruptedException {
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        SpringApplication springApplication = new SpringApplication(LivingProviderApplication.class);
+        springApplication.setWebApplicationType(WebApplicationType.NONE);
+        springApplication.run(args);
+        countDownLatch.await();
+    }
+}
+```
+
+```java
+/**
+ * 正在直播的直播间表
+ */
+@TableName("t_living_room")
+@Data
+public class LivingRoomPO {
+
+    @TableId(type = IdType.AUTO)
+    private Integer id;
+    private Long anchorId;
+    private Integer type;
+    private String roomName;
+    private String covertImg;
+    private Integer status;
+    private Integer watchNum;
+    private Integer goodNum;
+    private Date startTime;
+    private Date updateTime;
+}
+```
+
+```java
+/**
+ * 直播记录表
+ * 比直播表多了个endTime
+ */
+@TableName("t_living_room_record")
+@Data
+public class LivingRoomRecordPO {
+
+    @TableId(type = IdType.AUTO)
+    private Integer id;
+    private Long anchorId;
+    private Integer type;
+    private String roomName;
+    private String covertImg;
+    private Integer status;
+    private Integer watchNum;
+    private Integer goodNum;
+    private Date startTime;
+    private Date endTime;
+    private Date updateTime;
+}
+```
+
+```java
+@Mapper
+public interface LivingRoomMapper extends BaseMapper<LivingRoomPO> {
+    
+}
+```
+
+```java
+@Mapper
+public interface LivingRoomRecordMapper extends BaseMapper<LivingRoomRecordPO> {
+}
+```
+
+```java
+@DubboService
+public class LivingRomRpcImpl implements ILivingRoomRpc {
+    
+    @Resource
+    private ILivingRoomService livingRoomService;
+
+    @Override
+    public Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO) {
+        return livingRoomService.startLivingRoom(livingRoomReqDTO);
+    }
+    
+    @Override
+    public LivingRoomRespDTO queryByRoomId(Integer roomId) {
+        return livingRoomService.queryByRoomId(roomId);
+    }
+}
+```
+
+```java
+public interface ILivingRoomService {
+
+    /**
+     * 开启直播间
+     *
+     * @param livingRoomReqDTO
+     * @return
+     */
+    Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 关闭直播间
+     *
+     * @param livingRoomReqDTO
+     * @return
+     */
+    boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 根据用户id查询是否正在开播
+     *
+     * @param roomId
+     * @return
+     */
+    LivingRoomRespDTO queryByRoomId(Integer roomId);
+}
+```
+
+```java
+@Service
+public class LivingRoomServiceImpl implements ILivingRoomService {
+
+    @Resource
+    private LivingRoomMapper livingRoomMapper;
+    @Resource
+    private LivingRoomRecordMapper livingRoomRecordMapper;
+
+    @Override
+    public Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO) {
+        LivingRoomPO livingRoomPO = BeanUtil.copyProperties(livingRoomReqDTO, LivingRoomPO.class);
+        livingRoomPO.setStatus(CommonStatusEnum.VALID_STATUS.getCode());
+        livingRoomPO.setStartTime(new Date());
+        livingRoomMapper.insert(livingRoomPO);
+        return livingRoomPO.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO) {
+        LivingRoomPO livingRoomPO = livingRoomMapper.selectById(livingRoomReqDTO.getRoomId());
+        if (livingRoomPO == null) {
+            return false;
+        }
+        if (!livingRoomReqDTO.getAnchorId().equals(livingRoomPO.getAnchorId())) {
+            return false;
+        }
+        LivingRoomRecordPO livingRoomRecordPO = BeanUtil.copyProperties(livingRoomPO, LivingRoomRecordPO.class);
+        livingRoomRecordPO.setEndTime(new Date());
+        livingRoomRecordPO.setStatus(CommonStatusEnum.INVALID_STATUS.getCode());
+        livingRoomRecordMapper.insert(livingRoomRecordPO);
+        livingRoomMapper.deleteById(livingRoomPO.getId());
+        return true;
+    }
+
+    @Override
+    public LivingRoomRespDTO queryByRoomId(Integer roomId) {
+        LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(LivingRoomPO::getId, roomId);
+        queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
+        queryWrapper.last("limit 1");
+        LivingRoomPO livingRoomPO = livingRoomMapper.selectOne(queryWrapper);
+        return BeanUtil.copyProperties(livingRoomPO, LivingRoomRespDTO.class);
+    }
+}
+```
+
+
+
+**qiyu-live-api：**
+
+api模块调用刚才的living-provider模块的功能：
+
+```java
+@RestController
+@RequestMapping("/living")
+public class LivingRoomController {
+
+    @Resource
+    private ILivingRoomService livingRoomService;
+
+    @PostMapping("/startingLiving")
+    public WebResponseVO startingLiving(Integer type) {
+        if (type == null) {
+            return WebResponseVO.errorParam("需要给定直播间类型");
+        }
+        Integer roomId = livingRoomService.startingLiving(type);
+        LivingRoomInitVO livingRoomInitVO = new LivingRoomInitVO();
+        livingRoomInitVO.setRoomId(roomId);
+        return WebResponseVO.success(livingRoomInitVO);
+    }
+    
+    @PostMapping("/closeLiving")
+    public WebResponseVO closeLiving(Integer roomId) {
+        if (roomId == null) {
+            return WebResponseVO.errorParam("需要给定直播间id");
+        }
+        boolean status = livingRoomService.closeLiving(roomId);
+        if (status) {
+            return WebResponseVO.success();
+        }
+        return WebResponseVO.bizError("关播异常，请稍后再试");
+    }
+    
+    @PostMapping("/anchorConfig")
+    public WebResponseVO anchorConfig(Integer roomId) {
+        Long userId = QiyuRequestContext.getUserId();
+        return WebResponseVO.success(livingRoomService.anchorConfig(userId, roomId));
+    }
+}
+```
+
+```java
+@Data
+public class LivingRoomInitVO {
+
+    private Long anchorId;
+    private Long userId;
+    private String anchorImg;
+    private String roomName;
+    private boolean isAnchor;
+    private String avatar;
+    private Integer roomId;
+    private String watcherNickName;
+    private String anchorNickName;
+    //观众头像
+    private String watcherAvatar;
+    //默认背景图，为了方便讲解使用
+    private String defaultBgImg;
+    private Long pkObjId;
+}
+```
+
+```java
+public interface ILivingRoomService {
+    
+    /**
+     * 开始直播
+     */
+    Integer startingLiving(Integer type);
+
+    /**
+     * 关闭直播
+     */
+    boolean closeLiving(Integer roomId);
+
+    /**
+     * 验证当前用户是否是主播身份
+     */
+    LivingRoomInitVO anchorConfig(Long userId, Integer roomId);
+}
+```
+
+```java
+@Service
+public class LivingRoomServiceImpl implements ILivingRoomService {
+
+    @DubboReference
+    private ILivingRoomRpc livingRoomRpc;
+    @DubboReference
+    private IUserRpc userRpc;
+
+    @Override
+    public Integer startingLiving(Integer type) {
+        Long userId = QiyuRequestContext.getUserId();
+        UserDTO userDTO = userRpc.getUserById(userId);
+        LivingRoomReqDTO livingRoomReqDTO = new LivingRoomReqDTO();
+        livingRoomReqDTO.setAnchorId(userId);
+        livingRoomReqDTO.setRoomName("主播-" + userId + "的直播间");
+        livingRoomReqDTO.setCovertImg(userDTO.getAvatar());
+        livingRoomReqDTO.setType(type);
+        return livingRoomRpc.startLivingRoom(livingRoomReqDTO);
+    }
+
+    @Override
+    public boolean closeLiving(Integer roomId) {
+        LivingRoomReqDTO livingRoomReqDTO = new LivingRoomReqDTO();
+        livingRoomReqDTO.setRoomId(roomId);
+        livingRoomReqDTO.setAnchorId(QiyuRequestContext.getUserId());
+        return livingRoomRpc.closeLiving(livingRoomReqDTO);
+    }
+
+    @Override
+    public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
+        LivingRoomRespDTO respDTO = livingRoomRpc.queryByRoomId(roomId);
+        LivingRoomInitVO respVO = BeanUtil.copyProperties(respDTO, LivingRoomInitVO.class);
+        if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
+            respVO.setAnchor(false);
+        }else {
+            respVO.setAnchor(respDTO.getAnchorId().equals(userId));
+        }
+        return respVO;
+    }
+}
+```
+
+> 开播将会在表t_living_room中插入一条记录，关播将会在表t_living_room_record中插入一条记录，然后删除t_living_room的对应记录
+
+
+
 
 
 

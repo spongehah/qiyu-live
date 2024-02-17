@@ -31,6 +31,8 @@
         <module>qiyu-live-im-core-server-interface</module>
         <module>qiyu-live-im-router-interface</module>
         <module>qiyu-live-im-router-provider</module>
+        <module>qiyu-live-living-interface</module>
+        <module>qiyu-live-living-provider</module>
     </modules>
 
     <properties>

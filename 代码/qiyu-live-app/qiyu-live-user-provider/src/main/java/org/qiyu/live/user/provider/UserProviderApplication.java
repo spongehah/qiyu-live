@@ -20,30 +20,10 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 @SpringBootApplication
 @EnableDubbo
 @EnableDiscoveryClient
-public class UserProviderApplication implements CommandLineRunner {
+public class UserProviderApplication {
     public static void main(String[] args) {
         SpringApplication springApplication = new SpringApplication(UserProviderApplication.class);
         springApplication.setWebApplicationType(WebApplicationType.NONE);//Dubbo不使用tomcat，使用netty
         springApplication.run(args);
-    }
-    
-    @Resource
-    private IUserTagService userTagService;
-
-    @Resource
-    private IUserService userService;
-    
-    @Resource
-    private IUserPhoneService userPhoneService;
-
-    @Override
-    public void run(String... args) throws Exception {
-        String phone = "17341741178";
-        UserLoginDTO userLoginDTO = userPhoneService.login(phone);
-        System.out.println(userLoginDTO);
-        System.out.println(userPhoneService.queryByUserId(userLoginDTO.getUserId()));
-        System.out.println(userPhoneService.queryByUserId(userLoginDTO.getUserId()));
-        System.out.println(userPhoneService.queryByPhone(phone));
-        System.out.println(userPhoneService.queryByPhone(phone));
     }
 }
