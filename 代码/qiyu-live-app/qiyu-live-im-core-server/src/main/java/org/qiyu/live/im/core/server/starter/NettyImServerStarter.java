@@ -12,7 +12,7 @@ import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
 import org.qiyu.live.im.core.server.common.ImMsgDecoder;
 import org.qiyu.live.im.core.server.common.ImMsgEncoder;
-import org.qiyu.live.im.core.server.handler.ImServerCoreHandler;
+import org.qiyu.live.im.core.server.handler.tcp.TcpImServerCoreHandler;
 import org.qiyu.live.im.interfaces.ImTokenRpc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +38,7 @@ public class NettyImServerStarter implements InitializingBean {
     @Value("${qiyu.im.port}")
     private int port;
     @Resource
-    private ImServerCoreHandler imServerCoreHandler;
+    private TcpImServerCoreHandler tcpImServerCoreHandler;
     
     @Resource
     private Environment environment;
@@ -63,7 +63,7 @@ public class NettyImServerStarter implements InitializingBean {
                 channel.pipeline().addLast(new ImMsgEncoder());
                 channel.pipeline().addLast(new ImMsgDecoder());
                 //设置这个netty处理handler
-                channel.pipeline().addLast(imServerCoreHandler);
+                channel.pipeline().addLast(tcpImServerCoreHandler);
             }
         });
         //基于JVM的钩子函数去实现优雅关闭

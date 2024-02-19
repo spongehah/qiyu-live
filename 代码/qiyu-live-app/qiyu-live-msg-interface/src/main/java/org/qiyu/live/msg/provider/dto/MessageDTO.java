@@ -19,7 +19,19 @@ public class MessageDTO implements Serializable {
     /**
      * 通信目标用户id
      */
-    private Long objectId;
+    // private Long objectId;
+    /**
+     * 直播间id，用于查询在直播间的用户id，实现批量推送（实际上就是用roomId查询objectIdList）
+     */
+    private Integer roomId;
+    /**
+     * 发送人名称
+     */
+    private String senderName;
+    /**
+     * 发送人头像
+     */
+    private String senderAvatar;
 
     /**
      * 消息类型

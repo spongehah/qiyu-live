@@ -7,6 +7,7 @@ public class LivingRoomInitVO {
 
     private Long anchorId;
     private Long userId;
+    private String nickName;
     private String anchorImg;
     private String roomName;
     private boolean isAnchor;

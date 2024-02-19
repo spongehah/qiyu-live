@@ -35,20 +35,20 @@ public interface ILivingRoomRpc {
     boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
-     * 支持根据roomId查询出批量的userId（set）存储，3000个人，元素非常多，O(n)
-     *
-     * @param livingRoomReqDTO
-     * @return
-     */
-    List<Long> queryUserIdByRoomId(LivingRoomReqDTO livingRoomReqDTO);
-
-    /**
      * 直播间列表的分页查询
      *
      * @param livingRoomReqDTO
      * @return
      */
     PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 支持根据roomId查询出批量的userId（set）存储，3000个人，元素非常多，O(n)
+     *
+     * @param livingRoomReqDTO
+     * @return
+     */
+    List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO);
     
     /**
      * 用户在pk直播间中，连上线请求

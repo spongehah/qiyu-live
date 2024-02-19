@@ -27,6 +27,7 @@ public class ImTokenServiceImpl implements ImTokenService {
     @Override
     public Long getUserIdByToken(String token) {
         Object userId = redisTemplate.opsForValue().get(imProviderCacheKeyBuilder.buildImLoginTokenKey(token));
-        return userId == null ? null : Long.valueOf((Integer) userId);
+        // return userId == null ? null : Long.valueOf((Integer) userId);
+        return userId == null ? null : (Long) userId;
     }
 }

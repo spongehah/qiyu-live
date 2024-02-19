@@ -1,6 +1,8 @@
 package org.qiyu.live.living.provider.service;
 
 import org.qiyu.live.common.interfaces.dto.PageWrapper;
+import org.qiyu.live.im.core.server.interfaces.dto.ImOfflineDTO;
+import org.qiyu.live.im.core.server.interfaces.dto.ImOnlineDTO;
 import org.qiyu.live.living.interfaces.dto.LivingPkRespDTO;
 import org.qiyu.live.living.interfaces.dto.LivingRoomReqDTO;
 import org.qiyu.live.living.interfaces.dto.LivingRoomRespDTO;
@@ -32,14 +34,6 @@ public interface ILivingRoomService {
      * @return
      */
     LivingRoomRespDTO queryByRoomId(Integer roomId);
-    
-    /**
-     * 支持根据roomId查询出批量的userId（set）存储，3000个人，元素非常多，O(n)
-     *
-     * @param livingRoomReqDTO
-     * @return
-     */
-    List<Long> queryUserIdByRoomId(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
      * 直播间列表的分页查询
@@ -48,6 +42,28 @@ public interface ILivingRoomService {
      * @return
      */
     PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 从DB查询对应类型所有的直播间列表
+     * @param type
+     * @return
+     */
+    List<LivingRoomRespDTO> listAllLivingRoomFromDB(Integer type);
+
+    /**
+     * 用户登录在线roomId与userId关联处理
+     */
+    void userOnlineHandler(ImOnlineDTO imOnlineDTO);
+
+    /**
+     * 用户离线roomId与userId关联处理
+     */
+    void userOfflineHandler(ImOfflineDTO imOfflineDTO);
+
+    /**
+     * 支持根据roomId查询出批量的userId（set）存储，3000个人，元素非常多，O(n)
+     */
+    List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
      * 用户在pk直播间中，连上线请求
@@ -72,4 +88,5 @@ public interface ILivingRoomService {
      * @return
      */
     boolean offlinePk(LivingRoomReqDTO livingRoomReqDTO);
+    
 }

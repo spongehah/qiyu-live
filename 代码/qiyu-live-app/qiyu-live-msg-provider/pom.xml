@@ -121,6 +121,11 @@
             <artifactId>qiyu-live-im-router-interface</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>org.hah</groupId>
+            <artifactId>qiyu-live-living-interface</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <!--用于设置版本，下面docker打包要用-->

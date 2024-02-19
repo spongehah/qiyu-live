@@ -1,9 +1,11 @@
 package org.qiyu.live.im.core.server.handler.impl;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import io.netty.channel.ChannelHandlerContext;
 import jakarta.annotation.Resource;
 import org.idea.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
 import org.qiyu.live.im.constants.ImConstants;
 import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
@@ -11,12 +13,17 @@ import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
 import org.qiyu.live.im.core.server.interfaces.constants.ImCoreServerConstants;
+import org.qiyu.live.im.core.server.interfaces.dto.ImOfflineDTO;
 import org.qiyu.live.im.dto.ImMsgBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -30,6 +37,8 @@ public class LogoutMsgHandler implements SimpleHandler {
     private StringRedisTemplate stringRedisTemplate;
     @Resource
     private ImCoreServerProviderCacheKeyBuilder cacheKeyBuilder;
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
 
     @Override
     public void handler(ChannelHandlerContext ctx, ImMsg imMsg) {
@@ -42,6 +51,11 @@ public class LogoutMsgHandler implements SimpleHandler {
             throw new IllegalArgumentException("attr error");
         }
         // 将IM消息回写给客户端
+        logoutHandler(ctx, userId, appId);
+        sendLogoutMQ(ctx, userId, appId);
+    }
+
+    public void logoutHandler(ChannelHandlerContext ctx, Long userId, Integer appId) {
         ImMsgBody respBody = new ImMsgBody();
         respBody.setUserId(userId);
         respBody.setAppId(appId);
@@ -51,6 +65,7 @@ public class LogoutMsgHandler implements SimpleHandler {
         handlerLogout(userId, appId);
         ImContextUtils.removeUserId(ctx);
         ImContextUtils.removeAppId(ctx);
+        ImContextUtils.removeRoomId(ctx);
         ctx.close();
     }
 
@@ -61,5 +76,26 @@ public class LogoutMsgHandler implements SimpleHandler {
         stringRedisTemplate.delete(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId);
         // 删除心跳包存活缓存
         stringRedisTemplate.delete(cacheKeyBuilder.buildImLoginTokenKey(userId, appId));
+    }
+
+    /**
+     * ws协议登出时，发送消息取消userId与roomId的关联
+     */
+    private void sendLogoutMQ(ChannelHandlerContext ctx, Long userId, Integer appId) {
+        ImOfflineDTO imOfflineDTO = new ImOfflineDTO();
+        imOfflineDTO.setUserId(userId);
+        imOfflineDTO.setAppId(appId);
+        imOfflineDTO.setRoomId(ImContextUtils.getRoomId(ctx));
+        imOfflineDTO.setLogoutTime(System.currentTimeMillis());
+        CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(ImCoreServerProviderTopicNames.IM_OFFLINE_TOPIC, JSON.toJSONString(imOfflineDTO));
+        sendResult.whenComplete((v, e) -> {
+            if (e == null) {
+                LOGGER.info("[sendLogoutMQ] send result is {}", sendResult);
+            }
+        }).exceptionally(e -> {
+                    LOGGER.error("[sendLogoutMQ] send loginMQ error, error is ", e);
+                    return null;
+                }
+        );
     }
 }

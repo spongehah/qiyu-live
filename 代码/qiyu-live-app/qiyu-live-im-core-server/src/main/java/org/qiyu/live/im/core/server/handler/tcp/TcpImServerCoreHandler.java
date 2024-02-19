@@ -1,4 +1,4 @@
-package org.qiyu.live.im.core.server.handler;
+package org.qiyu.live.im.core.server.handler.tcp;
 
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -6,12 +6,13 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import jakarta.annotation.Resource;
 import org.qiyu.live.im.core.server.common.ImContextUtils;
 import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.ImHandlerFactory;
 import org.qiyu.live.im.core.server.handler.impl.LogoutMsgHandler;
 import org.springframework.stereotype.Component;
 
 @Component
 @ChannelHandler.Sharable
-public class ImServerCoreHandler extends SimpleChannelInboundHandler {
+public class TcpImServerCoreHandler extends SimpleChannelInboundHandler {
     
     @Resource
     private ImHandlerFactory imHandlerFactory;

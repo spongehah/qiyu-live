@@ -1854,7 +1854,7 @@ public class LoginMsgHandler implements SimpleHandler {
             respBody.setData("true");
             ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(respBody));
             LOGGER.info("[LoginMsgHandler] login success, userId is {}, appId is {}", userId, appId);
-            ctx.writeAndFlush(imMsg);
+            ctx.writeAndFlush(respMsg);
             return;
         }
         // 不允许建立连接
@@ -4412,13 +4412,1503 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
 
 > 开播将会在表t_living_room中插入一条记录，关播将会在表t_living_room_record中插入一条记录，然后删除t_living_room的对应记录
 
+## 4.3 直播间列表加载实现
+
+### 1 普通实现：直接从MySQL中查询
+
+**qiyu-live-common-interface：**
+
+```java
+package org.qiyu.live.common.interfaces.dto;
+
+import java.io.Serializable;
+import java.util.List;
+
+/**
+ * 分页查询所用的包装类
+ */
+public class PageWrapper<T> implements Serializable {
+
+    private List<T> list;
+    private boolean hasNext;
+
+    public List<T> getList() {
+        return list;
+    }
+
+    public void setList(List<T> list) {
+        this.list = list;
+    }
+
+    public boolean isHasNext() {
+        return hasNext;
+    }
+
+    public void setHasNext(boolean hasNext) {
+        this.hasNext = hasNext;
+    }
+
+    @Override
+    public String toString() {
+        return "PageWrapper{" +
+                "list=" + list +
+                ", hasNext=" + hasNext +
+                '}';
+    }
+}
+```
+
+**qiyu-live-api：**
+
+先写几个VO对象：
+
+```java
+package org.qiyu.live.api.vo.req;
+
+import lombok.Data;
+
+@Data
+public class LivingRoomReqVO {
+    private Integer type;
+    private int page;
+    private int pageSize;
+}
+```
+
+```java
+package org.qiyu.live.api.vo.resp;
+
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class LivingRoomPageRespVO {
+    
+    private List<LivingRoomRespVO> list;
+    private boolean hasNext;
+}
+```
+
+```java
+package org.qiyu.live.api.vo.resp;
+
+import lombok.Data;
+
+@Data
+public class LivingRoomRespVO {
+    private Integer id;
+    private String roomName;
+    private Long anchorId;
+    private Integer watchNum;
+    private Integer goodNum;
+    private String covertImg;
+}
+```
 
 
 
+开始正式代码的书写：
+
+api层：
+
+```java
+@RestController
+@RequestMapping("/living")
+public class LivingRoomController {
+
+   ...
+
+    @PostMapping("/list")
+    public WebResponseVO list(LivingRoomReqVO livingRoomReqVO) {
+        if (livingRoomReqVO == null || livingRoomReqVO.getType() == null) {
+            return WebResponseVO.errorParam("需要给定直播间类型");
+        }
+        if (livingRoomReqVO.getPage() <= 0 || livingRoomReqVO.getPageSize() > 100) {
+            return WebResponseVO.errorParam("分页查询参数错误");
+        }
+        return WebResponseVO.success(livingRoomService.list(livingRoomReqVO));
+    }
+}
+```
+
+```java
+ILivingRoomService
+/**
+ * 查询直播间列表（分页）
+ */
+LivingRoomPageRespVO list(LivingRoomReqVO livingRoomReqVO);
+```
+
+```java
+@Service
+public class LivingRoomServiceImpl implements ILivingRoomService {
+
+    ...
+
+    @Override
+    public LivingRoomPageRespVO list(LivingRoomReqVO livingRoomReqVO) {
+        PageWrapper<LivingRoomRespDTO> resultPage = livingRoomRpc.list(BeanUtil.copyProperties(livingRoomReqVO, LivingRoomReqDTO.class));
+        LivingRoomPageRespVO livingRoomPageRespVO = new LivingRoomPageRespVO();
+        livingRoomPageRespVO.setList(ConvertBeanUtils.convertList(resultPage.getList(), LivingRoomRespVO.class));
+        livingRoomPageRespVO.setHasNext(resultPage.isHasNext());
+        return livingRoomPageRespVO;
+    }
+}
+```
 
 
 
+**qiyu-live-living-provider：**
 
+mybatis-plus分页插件配置：
+
+```java
+@Configuration
+public class MyBatisPageConfig {
+
+    @Bean
+    public PaginationInnerInterceptor paginationInnerInterceptor() {
+        PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor();
+        paginationInnerInterceptor.setMaxLimit(1000L);
+        paginationInnerInterceptor.setDbType(DbType.MYSQL);
+        // 开启count 的join优化，只针对left join
+        paginationInnerInterceptor.setOptimizeJoin(true);
+        return paginationInnerInterceptor;
+    }
+
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor mybatisPlusInterceptor = new MybatisPlusInterceptor();
+        mybatisPlusInterceptor.setInterceptors(Collections.singletonList(paginationInnerInterceptor()));
+        return mybatisPlusInterceptor;
+    }
+}
+```
+
+rpc服务层：
+
+```java
+@Configuration
+public class MyBatisPageConfig {
+
+    @Bean
+    public PaginationInnerInterceptor paginationInnerInterceptor() {
+        PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor();
+        paginationInnerInterceptor.setMaxLimit(1000L);
+        paginationInnerInterceptor.setDbType(DbType.MYSQL);
+        // 开启count 的join优化，只针对left join
+        paginationInnerInterceptor.setOptimizeJoin(true);
+        return paginationInnerInterceptor;
+    }
+
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor mybatisPlusInterceptor = new MybatisPlusInterceptor();
+        mybatisPlusInterceptor.setInterceptors(Collections.singletonList(paginationInnerInterceptor()));
+        return mybatisPlusInterceptor;
+    }
+}
+```
+
+```java
+ILivingRoomRpc
+/**
+ * 直播间列表的分页查询
+ *
+ * @param livingRoomReqDTO
+ * @return
+ */
+PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO);
+```
+
+```java
+LivingRomRpcImpl
+    
+@Override
+public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
+    return livingRoomService.list(livingRoomReqDTO);
+}
+```
+
+```java
+ILivingRoomService
+/**
+ * 查询直播间列表（分页）
+ */
+LivingRoomPageRespVO list(LivingRoomReqVO livingRoomReqVO);
+```
+
+```java
+@Service
+public class LivingRoomServiceImpl implements ILivingRoomService {
+
+    ...
+
+    @Override
+    public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
+        LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(LivingRoomPO::getType, livingRoomReqDTO.getType());
+        queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
+        Page<LivingRoomPO> livingRoomPOPage = livingRoomMapper.selectPage(new Page<>((long) livingRoomReqDTO.getPage(), (long) livingRoomReqDTO.getPageSize()), queryWrapper);
+        PageWrapper<LivingRoomRespDTO> pageWrapper = new PageWrapper<>();
+        pageWrapper.setList(ConvertBeanUtils.convertList(livingRoomPOPage.getRecords(), LivingRoomRespDTO.class));
+        pageWrapper.setHasNext((long) livingRoomReqDTO.getPage() * livingRoomReqDTO.getPageSize() < livingRoomPOPage.getTotal());
+        return pageWrapper;
+    }   
+}
+```
+
+### 2 查询优化：定期更新Redis数据从缓存查
+
+> 我们需要对前面的单独查询roomId和查询list都做一下缓存封装：
+
+**qiyu-live-api：**
+
+修改LivingRoomServiceImpl中的anchorConfig方法：进行一些返回值的优化调整：
+
+```java
+@Override
+public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
+    LivingRoomRespDTO respDTO = livingRoomRpc.queryByRoomId(roomId);
+    LivingRoomInitVO respVO = new LivingRoomInitVO();
+    if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
+        //直播间不存在，设置roomId为-1
+        respVO.setRoomId(-1);
+    }else {
+        respVO.setRoomId(respDTO.getId());
+        respVO.setRoomName(respDTO.getRoomName());
+        respVO.setAnchorId(respDTO.getAnchorId());
+        respVO.setAnchor(respDTO.getAnchorId().equals(userId));
+        respVO.setAnchorImg(respDTO.getCovertImg());
+        respVO.setDefaultBgImg(respDTO.getCovertImg());
+    }
+    return respVO;
+}
+```
+
+
+
+**qiyu-live-living-provider：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-framework-redis-starter</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+nacos配置文件添加redis配置：
+
+```yaml
+  data:
+    redis:
+      host: 47.120.12.106
+      port: 6379
+      password: 123456
+      lettuce:
+        pool:
+          min-idle: 10   #最小空闲连接
+          max-active: 100  #最大连接
+          max-idle: 10   #最大空闲连接
+```
+
+**LivingRoomServiceImpl对开关播代码、查询单个直播间代码和查询直播间代码都做了Redis相关操作的修改：**
+
+```java
+@Service
+public class LivingRoomServiceImpl implements ILivingRoomService {
+
+    @Resource
+    private LivingRoomMapper livingRoomMapper;
+    @Resource
+    private LivingRoomRecordMapper livingRoomRecordMapper;
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    @Resource
+    private LivingProviderCacheKeyBuilder cacheKeyBuilder;
+
+    @Override
+    public Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO) {
+        LivingRoomPO livingRoomPO = BeanUtil.copyProperties(livingRoomReqDTO, LivingRoomPO.class);
+        livingRoomPO.setStatus(CommonStatusEnum.VALID_STATUS.getCode());
+        livingRoomPO.setStartTime(new Date());
+        livingRoomMapper.insert(livingRoomPO);
+        String cacheKey = cacheKeyBuilder.buildLivingRoomObj(livingRoomPO.getId());
+        // 防止之前有空值缓存，这里做移除操作
+        redisTemplate.delete(cacheKey);
+        return livingRoomPO.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO) {
+        LivingRoomPO livingRoomPO = livingRoomMapper.selectById(livingRoomReqDTO.getRoomId());
+        if (livingRoomPO == null) {
+            return false;
+        }
+        if (!livingRoomReqDTO.getAnchorId().equals(livingRoomPO.getAnchorId())) {
+            return false;
+        }
+        LivingRoomRecordPO livingRoomRecordPO = BeanUtil.copyProperties(livingRoomPO, LivingRoomRecordPO.class);
+        livingRoomRecordPO.setEndTime(new Date());
+        livingRoomRecordPO.setStatus(CommonStatusEnum.INVALID_STATUS.getCode());
+        livingRoomRecordMapper.insert(livingRoomRecordPO);
+        livingRoomMapper.deleteById(livingRoomPO.getId());
+        // 移除掉直播间cache
+        String cacheKey = cacheKeyBuilder.buildLivingRoomObj(livingRoomReqDTO.getRoomId());
+        redisTemplate.delete(cacheKey);
+        return true;
+    }
+
+    @Override
+    public LivingRoomRespDTO queryByRoomId(Integer roomId) {
+        String cacheKey = cacheKeyBuilder.buildLivingRoomObj(roomId);
+        LivingRoomRespDTO queryResult = (LivingRoomRespDTO) redisTemplate.opsForValue().get(cacheKey);
+        if (queryResult != null) {
+            // 空值缓存
+            if (queryResult.getId() == null) {
+                return null;
+            }
+            return queryResult;
+        }
+        // 查询数据库
+        LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(LivingRoomPO::getId, roomId);
+        queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
+        queryWrapper.last("limit 1");
+        queryResult = BeanUtil.copyProperties(livingRoomMapper.selectOne(queryWrapper), LivingRoomRespDTO.class);
+        if (queryResult == null) {
+            // 防止缓存穿透
+            redisTemplate.opsForValue().set(cacheKey, new LivingRoomRespDTO(), 1L, TimeUnit.MINUTES);
+            return null;
+        }
+        redisTemplate.opsForValue().set(cacheKey, queryResult, 30, TimeUnit.MINUTES);
+        return queryResult;
+    }
+
+    @Override
+    public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
+        // 因为直播平台同时在线直播人数不算太多，属于读多写少场景，所以将其缓存进Redis进行提速
+        String cacheKey = cacheKeyBuilder.buildLivingRoomList(livingRoomReqDTO.getType());
+        int page = livingRoomReqDTO.getPage();
+        int pageSize = livingRoomReqDTO.getPageSize();
+        Long total = redisTemplate.opsForList().size(cacheKey);
+        List<Object> resultList = redisTemplate.opsForList().range(cacheKey, (long) (page - 1) * pageSize, (long) page * pageSize);
+        PageWrapper<LivingRoomRespDTO> pageWrapper = new PageWrapper<>();
+        if (CollectionUtils.isEmpty(resultList)) {
+            pageWrapper.setList(Collections.emptyList());
+            pageWrapper.setHasNext(false);
+        } else {
+            pageWrapper.setList(ConvertBeanUtils.convertList(resultList, LivingRoomRespDTO.class));
+            pageWrapper.setHasNext((long) page * pageSize < total);
+        }
+        return pageWrapper;
+    }
+
+    @Override
+    public List<LivingRoomRespDTO> listAllLivingRoomFromDB(Integer type) {
+
+        LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(LivingRoomPO::getType, type);
+        queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
+        //按照时间倒序展示
+        queryWrapper.orderByDesc(LivingRoomPO::getStartTime);
+        //为性能做保证，只查询1000个
+        queryWrapper.last("limit 1000");
+        return ConvertBeanUtils.convertList(livingRoomMapper.selectList(queryWrapper), LivingRoomRespDTO.class);
+    }
+}
+```
+
+**新加一个定期任务：（这里用的延迟线程池实现，还可以使用分布式定时任务(如xxl-job等)、Spring Scheduled等实现）**
+
+该任务用于定期刷新Redis中缓存的直播间列表的list集合
+
+因为Redis直播间列表属于读多写少的场景，并且首页直播间列表加载有一定延迟(这里是1s)也无碍，所以采取定期更新的措施
+
+- 此处采取直播间的单个查询(String结构)和list查询(list结构)分开存储在Redis，这样做的**缺点是Redis额外消耗一倍的内存**
+- 还可以使用Hash结构一起存储，单个查询时get(key)即可，但是分页查询时，list结构没有范围查询range，只能先读取所有数据到JVM，**缺点是消耗JVM内存**
+
+```java
+/**
+ * 用于定期刷新Redis中缓存的直播间列表的list集合
+ */
+@Configuration
+public class RefreshLivingRoomListJob implements InitializingBean {
+    
+    private static final Logger LOGGER = LoggerFactory.getLogger(RefreshLivingRoomListJob.class);
+    
+    @Resource
+    private ILivingRoomService livingRoomService;
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+    @Resource
+    private LivingProviderCacheKeyBuilder cacheKeyBuilder;
+    
+    private static final ScheduledThreadPoolExecutor SCHEDULED_THREAD_POOL_EXECUTOR = new ScheduledThreadPoolExecutor(1);
+
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        //一秒钟刷新一次直播间列表数据
+        SCHEDULED_THREAD_POOL_EXECUTOR.scheduleWithFixedDelay(new RefreshCacheListJob(), 3000, 1000, TimeUnit.MILLISECONDS);
+    }
+    
+    class RefreshCacheListJob implements Runnable{
+        @Override
+        public void run() {
+            String cacheKey = cacheKeyBuilder.buildRefreshLivingRoomListLock();
+            //这把锁等他自动过期
+            Boolean lockStatus = redisTemplate.opsForValue().setIfAbsent(cacheKey, 1, 1L, TimeUnit.SECONDS);
+            if (lockStatus) {
+                LOGGER.info("[RefreshLivingRoomListJob] starting  更新数据库中记录的直播间到Redis中去");
+                refreshDBTiRedis(LivingRoomTypeEnum.DEFAULT_LIVING_ROOM.getCode());
+                refreshDBTiRedis(LivingRoomTypeEnum.PK_LIVING_ROOM.getCode());
+                LOGGER.info("[RefreshLivingRoomListJob] end  更新数据库中记录的直播间到Redis中去");
+            }
+        }
+    }
+
+
+    private void refreshDBTiRedis(Integer type) {
+        String cacheKey = cacheKeyBuilder.buildLivingRoomList(type);
+        List<LivingRoomRespDTO> resultList = livingRoomService.listAllLivingRoomFromDB(type);
+        if (CollectionUtils.isEmpty(resultList)) {
+            redisTemplate.unlink(cacheKey);
+            return;
+        }
+        String tempListName = cacheKey + "_temp";
+        //需要一行一行push进去，pushAll方法有bug，会添加到一条记录里去
+        for (LivingRoomRespDTO livingRoomRespDTO : resultList) {
+            redisTemplate.opsForList().rightPush(tempListName, livingRoomRespDTO);
+        }
+        //直接修改重命名这个list，不要直接对原来的list进行修改，减少阻塞的影响
+        redisTemplate.rename(tempListName, cacheKey);
+        redisTemplate.unlink(tempListName);
+    }
+}
+```
+
+## 4.4 浏览器使用WebSocket协议接入IM服务器
+
+> 之前我们在第3节中写的测试代码，都是我们在idea中写代码进行与im服务器进行连接，属于TCP长连接方式，
+> 接下来我们要在浏览器使用WebSocket的方式与im服务器进行连接
+
+我们首先要对im服务进行一些改造：
+
+
+
+1 准备工作：
+
+**qiyu-live-im-interface：**
+
+ImMsgCodeEnum加入新消息包类型：
+
+```java
+WS_SHARD_MSG(1000, "首次建立ws连接消息包"),
+```
+
+**qiyu-live-im-core-server：**
+
+新Encoder：
+
+```java
+package org.qiyu.live.im.core.server.common;
+
+import com.alibaba.fastjson.JSON;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+
+
+public class WebsocketEncoder extends ChannelOutboundHandlerAdapter {
+
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        if (!(msg instanceof ImMsg)) {
+            super.write(ctx, msg, promise);
+            return;
+        }
+        ImMsg imMsg = (ImMsg) msg;
+        ctx.channel().writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(imMsg)));
+    }
+}
+```
+
+2 将ImServerCoreHandler移动到./tcp目录下，并重命名为TcpImServerCoreHandler，代表当前的这个核心处理器为处理TCP连接的处理器
+
+3 编写WebSocket连接核心处理器：
+
+```java
+/**
+ * WebSocket连接处理器
+ */
+@Component
+@ChannelHandler.Sharable
+public class WsImServerCoreHandler extends SimpleChannelInboundHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WsImServerCoreHandler.class);
+
+    @Resource
+    private ImHandlerFactory imHandlerFactory;
+    @Resource
+    private LogoutMsgHandler logoutMsgHandler;
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
+        if (msg instanceof WebSocketFrame) {
+            wsMsgHandler(ctx, (WebSocketFrame) msg);
+        }
+    }
+
+    /**
+     * 客户端正常或意外掉线，都会触发这里
+     *
+     * @param ctx
+     * @throws Exception
+     */
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) {
+        Long userId = ImContextUtils.getUserId(ctx);
+        int appId = ImContextUtils.getAppId(ctx);
+        logoutMsgHandler.handlerLogout(userId, appId);
+    }
+
+    private void wsMsgHandler(ChannelHandlerContext ctx, WebSocketFrame msg) {
+        // 如过不是文本消息，统一后台不会处理
+        if (!(msg instanceof TextWebSocketFrame)) {
+            LOGGER.error("[WsImServerCoreHandler] wsMsgHandler, {} msg types not supported", msg.getClass().getName());
+            return;
+        }
+        try {
+            // 返回应答消息
+            String content = (((TextWebSocketFrame) msg).text());
+            JSONObject jsonObject = JSON.parseObject(content, JSONObject.class);
+            ImMsg imMsg = new ImMsg();
+            imMsg.setMagic(jsonObject.getShort("magic"));
+            imMsg.setCode(jsonObject.getInteger("code"));
+            imMsg.setLen(jsonObject.getInteger("len"));
+            imMsg.setBody(jsonObject.getString("body").getBytes());
+            imHandlerFactory.doMsgHandler(ctx, imMsg);
+        } catch (Exception e) {
+            LOGGER.error("[WsImServerCoreHandler] wsMsgHandler error is ", e);
+        }
+    }
+}
+```
+
+4 编写WebSocket连接的握手处理器：
+
+```java
+/**
+ * WebSocket协议的握手连接处理器
+ */
+@Component
+@ChannelHandler.Sharable
+@RefreshScope
+public class WsSharkHandler extends ChannelInboundHandlerAdapter {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WsSharkHandler.class);
+
+    @Value("${qiyu.im.ws.port}")
+    private int port;
+    @Value("${spring.cloud.nacos.discovery.ip}")
+    private String serverIp;
+    @DubboReference
+    private ImTokenRpc imTokenRpc;
+    @Resource
+    private LoginMsgHandler loginMsgHandler;
+
+    private WebSocketServerHandshaker webSocketServerHandshaker;
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        // 握手连接接入ws
+        if (msg instanceof FullHttpRequest) {
+            handlerHttpRequest(ctx, (FullHttpRequest) msg);
+            return;
+        }
+        // 正常关闭链路
+        if (msg instanceof CloseWebSocketFrame) {
+            webSocketServerHandshaker.close(ctx.channel(), (CloseWebSocketFrame) ((WebSocketFrame) msg).retain());
+            return;
+        }
+        ctx.fireChannelRead(msg);
+    }
+
+    private void handlerHttpRequest(ChannelHandlerContext ctx, FullHttpRequest msg) {
+        String webSocketUrl = "ws://" + serverIp + ":" + port;
+        // 构造握手响应返回
+        WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(webSocketUrl, null, false);
+        // 进行参数校验
+        String uri = msg.uri();
+        String token = uri.substring(uri.indexOf("token"), uri.indexOf("&")).replaceAll("token=", "");
+        Long userId = Long.valueOf(uri.substring(uri.indexOf("userId")).replaceAll("userId=", ""));
+        Long queryUserId = imTokenRpc.getUserIdByToken(token);
+        //token的最后与%拼接的就是appId
+        Integer appId = Integer.valueOf(token.substring(token.indexOf("%") + 1));
+        if (queryUserId == null || !queryUserId.equals(userId)) {
+            LOGGER.error("[WsSharkHandler] token 校验不通过！");
+            ctx.close();
+            return;
+        }
+        // 参数校验通过，建立ws握手连接
+        webSocketServerHandshaker = wsFactory.newHandshaker(msg);
+        if (webSocketServerHandshaker == null) {
+            WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
+            return;
+        }
+        ChannelFuture channelFuture = webSocketServerHandshaker.handshake(ctx.channel(), msg);
+        // 首次握手建立ws连接后，返回一定的内容给到客户端
+        if (channelFuture.isSuccess()) {
+            //这里调用login消息包的处理器，直接做login成功的处理
+            loginMsgHandler.loginSuccessHandler(ctx, userId, appId);
+            LOGGER.info("[WsSharkHandler] channel is connect");
+        }
+    }
+}
+```
+
+> 这里我们需要去到LoginMsgHandler，将允许建立连接的逻辑抽取出来，然后在原处进行调用：
+>
+> ```java
+> 	...
+> 	// 从RPC获取的userId和传递过来的userId相等，则没出现差错，允许建立连接
+>     if (userId != null && userId.equals(userIdFromMsg)) {
+>         loginSuccessHandler(ctx, userId, appId);
+>         return;
+>     }
+>     ...
+> }
+> 
+> /**
+>  * 如果用户成功登录，就处理相关记录
+>  */
+> public void loginSuccessHandler(ChannelHandlerContext ctx, Long userId, Integer appId) {
+>     // 按照userId保存好相关的channel信息
+>     ChannelHandlerContextCache.put(userId, ctx);
+>     // 将userId保存到netty域信息中，用于正常/非正常logout的处理
+>     ImContextUtils.setUserId(ctx, userId);
+>     ImContextUtils.setAppId(ctx, appId);
+>     // 将im消息回写给客户端
+>     ImMsgBody respBody = new ImMsgBody();
+>     respBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+>     respBody.setUserId(userId);
+>     respBody.setData("true");
+>     ImMsg respMsg = ImMsg.build(ImMsgCodeEnum.IM_LOGIN_MSG.getCode(), JSON.toJSONString(respBody));
+>     // 将im服务器的ip+端口地址保存到Redis，以供Router服务取出进行转发
+>     stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
+>             ChannelHandlerContextCache.getServerIpAddress(),
+>             2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+>     LOGGER.info("[LoginMsgHandler] login success, userId is {}, appId is {}", userId, appId);
+>     ctx.writeAndFlush(respMsg);
+> }
+> ```
+
+5 编写WebSocket协议的im服务器启动类：
+
+```java
+@Configuration
+@RefreshScope
+public class WsNettyImServerStarter implements InitializingBean {
+
+    private static Logger LOGGER = LoggerFactory.getLogger(WsNettyImServerStarter.class);
+
+    //指定监听的端口
+    @Value("${qiyu.im.ws.port}")
+    private int port;
+    @Resource
+    private WsSharkHandler wsSharkHandler;
+    @Resource
+    private WsImServerCoreHandler wsImServerCoreHandler;
+    @Resource
+    private Environment environment;
+
+    //基于netty去启动一个java进程，绑定监听的端口
+    public void startApplication() throws InterruptedException {
+        //处理accept事件
+        NioEventLoopGroup bossGroup = new NioEventLoopGroup();
+        //处理read&write事件
+        NioEventLoopGroup workerGroup = new NioEventLoopGroup();
+        ServerBootstrap bootstrap = new ServerBootstrap();
+        bootstrap.group(bossGroup, workerGroup);
+        bootstrap.channel(NioServerSocketChannel.class);
+        //netty初始化相关的handler
+        bootstrap.childHandler(new ChannelInitializer<>() {
+            @Override
+            protected void initChannel(Channel ch) throws Exception {
+                //打印日志，方便观察
+                LOGGER.info("初始化连接渠道");
+                //因为基于http协议 使用http的编码和解码器
+                ch.pipeline().addLast(new HttpServerCodec());
+                //是以块方式写 添加处理器
+                ch.pipeline().addLast(new ChunkedWriteHandler());
+                //http数据在传输过程中是分段 就是可以将多个段聚合 这就是为什么当浏览器发生大量数据时 就会发生多次http请求
+                ch.pipeline().addLast(new HttpObjectAggregator(8192));
+                ch.pipeline().addLast(new WebsocketEncoder());
+                ch.pipeline().addLast(wsSharkHandler);
+                ch.pipeline().addLast(wsImServerCoreHandler);
+            }
+        });
+        //基于JVM的钩子函数去实现优雅关闭
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }));
+        //获取im的服务注册ip和暴露端口
+        String registryIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");
+        String registryPort = environment.getProperty("DUBBO_PORT_TO_REGISTRY");
+        if (StringUtils.isEmpty(registryPort) || StringUtils.isEmpty(registryIp)) {
+            throw new IllegalArgumentException("启动参数中的注册端口和注册ip不能为空");
+        }
+        ChannelHandlerContextCache.setServerIpAddress(registryIp + ":" + registryPort);
+        ChannelFuture channelFuture = bootstrap.bind(port).sync();
+        LOGGER.info("服务启动成功，监听端口为{}", port);
+        //这里会阻塞掉主线程，实现服务长期开启的效果
+        channelFuture.channel().closeFuture().sync();
+    }
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        Thread nettyServerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    startApplication();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        nettyServerThread.setName("qiyu-live-im-server-ws");
+        nettyServerThread.start();
+    }
+}
+```
+
+6 更改配置文件：
+
+在bootstrap.yml中加入spring.cloud.nacos.discovery.ip的配置，配置为前面我们im服务器注册到DUBBO/NACOS的ip地址
+
+在nacos的配置文件中新增：qiyu.im.ws.port = 8086
+
+7 编写api模块，返回给前端建立连接要用的token、serverAddress等信息
+
+**qiyu-live-api：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-provider</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+package org.qiyu.live.api.vo.resp;
+
+import lombok.Data;
+
+@Data
+public class ImConfigVO {
+    
+    private String token;
+    private String wsImServerAddress;
+    private String tcpImServerAddress;
+}
+```
+
+```java
+@RestController
+@RequestMapping("/im")
+public class ImController {
+    
+    @Resource
+    private ImService imService;
+    
+    @PostMapping("/getImConfig")
+    public WebResponseVO getImConfig() {
+        return WebResponseVO.success(imService.getImConfig());
+    }
+}
+```
+
+```java
+public interface ImService {
+    
+    ImConfigVO getImConfig();
+}
+```
+
+```java
+@Service
+public class ImServiceImpl implements ImService {
+
+    @DubboReference
+    private ImTokenRpc imTokenRpc;
+    @Resource
+    private DiscoveryClient discoveryClient;
+
+    // 这里是通过DiscoveryClient获取Nacos中的注册信息，我们还可以通过在ImCoreServer中写一个rpc方法，和构建Router功能是一样，获取我们在启动参数中的添加的DUBBO注册ip
+    @Override
+    public ImConfigVO getImConfig() {
+        ImConfigVO imConfigVO = new ImConfigVO();
+        imConfigVO.setToken(imTokenRpc.createImLoginToken(QiyuRequestContext.getUserId(), AppIdEnum.QIYU_LIVE_BIZ.getCode()));
+        // 获取到在Nacos中注册的对应服务名的实例集合
+        List<ServiceInstance> serverInstanceList = discoveryClient.getInstances("qiyu-live-im-core-server");
+        // 打乱集合顺序
+        Collections.shuffle(serverInstanceList);
+        ServiceInstance serviceInstance = serverInstanceList.get(0);
+        imConfigVO.setTcpImServerAddress(serviceInstance.getHost() + ":8085");
+        imConfigVO.setWsImServerAddress(serviceInstance.getHost() + ":8086");
+        return imConfigVO;
+    }
+}
+```
+
+8 前端发送请求建立连接的url：
+
+> let url = "ws://wsServerIp:port/token=???&&userId=???"
+>
+> 其中wsServerIp:port、token、userId均可由api模块的/im/getImConfig接口返回
+
+## 4.5 实现直播间消息的批量发送给直播间用户
+
+### 1 在用户连接/断开im服务器时进行与roomId的关联
+
+**我们需要在用户连接/断开im服务器时进行与roomId的关联，然后进行直播间聊天消息的批量传递给其它在线的用户**
+
+
+
+1 要进行userId与roomId的关联，那么我们ws连接服务器时，url就应该携带roomId，
+
+所以我们去修改WsSharkHandler：修改下面这部分逻辑：在调用loginSuccessHandler多加入参数roomId，并修改了前端发送ws连接的参数格式
+
+```java
+	...	
+
+	private void handlerHttpRequest(ChannelHandlerContext ctx, FullHttpRequest msg) {
+        // 前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{param}
+        String webSocketUrl = "ws://" + serverIp + ":" + port;
+        // 构造握手响应返回
+        WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(webSocketUrl, null, false);
+        // 进行参数校验
+        String uri = msg.uri();
+        String[] paramArr = uri.split("/");
+        String token = paramArr[1];
+        Long userId = Long.valueOf(paramArr[2]);
+        Long queryUserId = imTokenRpc.getUserIdByToken(token);
+        //token的最后与%拼接的就是appId
+        Integer appId = Integer.valueOf(token.substring(token.indexOf("%") + 1));
+        if (queryUserId == null || !queryUserId.equals(userId)) {
+            LOGGER.error("[WsSharkHandler] token 校验不通过！");
+            ctx.close();
+            return;
+        }
+        // 参数校验通过，建立ws握手连接
+        webSocketServerHandshaker = wsFactory.newHandshaker(msg);
+        if (webSocketServerHandshaker == null) {
+            WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
+            return;
+        }
+        ChannelFuture channelFuture = webSocketServerHandshaker.handshake(ctx.channel(), msg);
+        // 首次握手建立ws连接后，返回一定的内容给到客户端
+        if (channelFuture.isSuccess()) {
+            Integer code = Integer.valueOf(paramArr[3]);
+            Integer roomId = null;
+            if (code == ParamCodeEnum.LIVING_ROOM_LOGIN.getCode()) {
+                roomId = Integer.valueOf(paramArr[4]);
+            }
+            //这里调用login消息包的处理器，直接做login成功的处理
+            loginMsgHandler.loginSuccessHandler(ctx, userId, appId, roomId);
+            LOGGER.info("[WsSharkHandler] channel is connect");
+        }
+    }
+
+    enum ParamCodeEnum {
+        LIVING_ROOM_LOGIN(1001, "直播间登录");
+        int code;
+        String desc;
+        ParamCodeEnum(int code, String desc) {
+            this.code = code;
+            this.desc = desc;
+        }
+        public int getCode() {
+            return code;
+        }
+        public String getDesc() {
+            return desc;
+        }
+    }
+}
+```
+
+2 准备DTO进行消息传递：
+
+**qiyu-live-im-core-server-interface：**
+
+```java
+@Data
+public class ImOnlineDTO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 3106376010560727999L;
+    private Long userId;
+    private Integer appId;
+    private Integer roomId;
+    private long loginTime;
+}
+```
+
+```java
+@Data
+public class ImOfflineDTO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 5005291896846703608L;
+    private Long userId;
+    private Integer appId;
+    private Integer roomId;
+    private long logoutTime;
+}
+```
+
+**qiyu-live-im-core-server：**
+
+ImContextAttr加上：
+
+```java
+/**
+ * 绑定roomId
+ */
+public static AttributeKey<Integer> ROOM_ID = AttributeKey.valueOf("roomId");
+```
+
+ImContextUtils加上：
+
+```java
+public static Integer getRoomId(ChannelHandlerContext ctx) {
+    return ctx.attr(ImContextAttr.ROOM_ID).get();
+}
+public static void setRoomId(ChannelHandlerContext ctx, Integer roomId) {
+    ctx.attr(ImContextAttr.ROOM_ID).set(roomId);
+}
+
+public static void removeRoomId(ChannelHandlerContext ctx) {
+    ctx.attr(ImContextAttr.ROOM_ID).remove();
+}
+```
+
+**qiyu-live-common-interface：**
+
+ImCoreServerProviderTopicNames加上：
+
+```java
+/**
+ * 用户初次登录im服务发mq
+ */
+public static final String IM_ONLINE_TOPIC = "im-online-topic";
+
+/**
+ * 用户断开im服务发mq
+ */
+public static final String IM_OFFLINE_TOPIC = "im-offline-topic";
+```
+
+3 LoginMsgHandler进行发送mq消息，异步绑定userId与roomId：
+
+```java
+handler()方法调用逻辑改为 loginSuccessHandler(ctx, userId, appId, null);
+loginSuccessHandler()方法最后一行加上 sendLoginMQ(userId, appId, roomId); 前面加上 ImContextUtils.setRoomId(ctx, roomId);
+
+/**
+ * ws协议用户初次登录的时候发送mq消息，将userId与roomId关联起来，便于直播间聊天消息的推送
+ */
+private void sendLoginMQ(Long userId, Integer appId, Integer roomId) {
+    ImOnlineDTO imOnlineDTO = new ImOnlineDTO();
+    imOnlineDTO.setUserId(userId);
+    imOnlineDTO.setAppId(appId);
+    imOnlineDTO.setRoomId(roomId);
+    imOnlineDTO.setLoginTime(System.currentTimeMillis());
+    CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(ImCoreServerProviderTopicNames.IM_ONLINE_TOPIC, JSON.toJSONString(imOnlineDTO));
+    sendResult.whenComplete((v, e) -> {
+        if (e == null) {
+            LOGGER.info("[sendLoginMQ] send result is {}", sendResult);
+        }
+    }).exceptionally(e -> {
+                LOGGER.error("[sendLoginMQ] send loginMQ error, error is ", e);
+                return null;
+            }
+    );
+}
+```
+
+4 LogoutMsgHandler进行发送mq消息，异步取消userId与roomId的绑定：
+
+```java
+handler()方法最后一行加上 sendLogoutMQ(ctx, userId, appId);
+logoutHandler()方法加上 ImContextUtils.removeRoomId(ctx);
+
+/**
+ * ws协议登出时，发送消息取消userId与roomId的关联
+ */
+private void sendLogoutMQ(ChannelHandlerContext ctx, Long userId, Integer appId) {
+    ImOfflineDTO imOfflineDTO = new ImOfflineDTO();
+    imOfflineDTO.setUserId(userId);
+    imOfflineDTO.setAppId(appId);
+    imOfflineDTO.setRoomId(ImContextUtils.getRoomId(ctx));
+    imOfflineDTO.setLogoutTime(System.currentTimeMillis());
+    CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(ImCoreServerProviderTopicNames.IM_OFFLINE_TOPIC, JSON.toJSONString(imOfflineDTO));
+    sendResult.whenComplete((v, e) -> {
+        if (e == null) {
+            LOGGER.info("[sendLogoutMQ] send result is {}", sendResult);
+        }
+    }).exceptionally(e -> {
+                LOGGER.error("[sendLogoutMQ] send loginMQ error, error is ", e);
+                return null;
+            }
+    );
+}
+```
+
+5 编写**qiyu-live-living-provider模块**接收消息进行userId和roomId的处理：
+
+```xml
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>fastjson</artifactId>
+    <version>${alibaba-fastjson.version}</version>
+</dependency>
+<dependency>
+    <groupId>org.springframework.kafka</groupId>
+    <artifactId>spring-kafka</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-im-core-server-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <scope>compile</scope>
+</dependency>
+```
+
+nacos配置文件添加：
+
+```yaml
+  # Kafka配置
+  kafka:
+    bootstrap-servers: hahhome:9092
+    # 指定listener的并发数
+    listener:
+      concurrency: 3
+      ack-mode: manual
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+```
+
+```java
+package org.qiyu.live.living.provider.kafka;
+
+import com.alibaba.fastjson.JSON;
+import jakarta.annotation.Resource;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.qiyu.live.im.core.server.interfaces.dto.ImOnlineDTO;
+import org.qiyu.live.living.provider.service.ILivingRoomService;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class LivingRoomOnlineConsumer {
+    
+    @Resource
+    private ILivingRoomService livingRoomService;
+    
+    @KafkaListener(topics = ImCoreServerProviderTopicNames.IM_ONLINE_TOPIC, groupId = "im-online-consumer")
+    public void consumeOnline(String imOnlineDTOStr) {
+        ImOnlineDTO imOnlineDTO = JSON.parseObject(imOnlineDTOStr, ImOnlineDTO.class);
+        livingRoomService.userOnlineHandler(imOnlineDTO);
+    }
+}
+```
+
+```java
+package org.qiyu.live.living.provider.kafka;
+
+import com.alibaba.fastjson.JSON;
+import jakarta.annotation.Resource;
+import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
+import org.qiyu.live.im.core.server.interfaces.dto.ImOfflineDTO;
+import org.qiyu.live.living.provider.service.ILivingRoomService;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class LivingRoomOfflineConsumer {
+
+    @Resource
+    private ILivingRoomService livingRoomService;
+
+    @KafkaListener(topics = ImCoreServerProviderTopicNames.IM_OFFLINE_TOPIC, groupId = "im-offline-consumer")
+    public void consumeOnline(String imOfflineDTOStr) {
+        ImOfflineDTO imOfflineDTO = JSON.parseObject(imOfflineDTOStr, ImOfflineDTO.class);
+        livingRoomService.userOfflineHandler(imOfflineDTO);
+    }
+}
+```
+
+```java
+LivingRomRpcImpl
+@Override
+public List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO) {
+    return livingRoomService.queryUserIdsByRoomId(livingRoomReqDTO);
+}
+```
+
+```java
+ILivingRoomService
+/**
+ * 用户登录在线roomId与userId关联处理
+ */
+void userOnlineHandler(ImOnlineDTO imOnlineDTO);
+/**
+ * 用户离线roomId与userId关联处理
+ */
+void userOfflineHandler(ImOfflineDTO imOfflineDTO);
+/**
+ * 支持根据roomId查询出批量的userId（set）存储，3000个人，元素非常多，O(n)
+ */
+List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO);
+```
+
+```java
+LivingRoomServiceImpl
+    
+@Override
+public void userOnlineHandler(ImOnlineDTO imOnlineDTO) {
+    Long userId = imOnlineDTO.getUserId();
+    Integer appId = imOnlineDTO.getAppId();
+    Integer roomId = imOnlineDTO.getRoomId();
+    String cacheKey = cacheKeyBuilder.buildLivingRoomUserSet(roomId, appId);
+    redisTemplate.opsForSet().add(cacheKey, userId);
+    redisTemplate.expire(cacheKey, 12L, TimeUnit.HOURS);
+}
+@Override
+public void userOfflineHandler(ImOfflineDTO imOfflineDTO) {
+    Long userId = imOfflineDTO.getUserId();
+    Integer appId = imOfflineDTO.getAppId();
+    Integer roomId = imOfflineDTO.getRoomId();
+    String cacheKey = cacheKeyBuilder.buildLivingRoomUserSet(roomId, appId);
+    redisTemplate.opsForSet().remove(cacheKey, userId);
+}
+@Override
+public List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO) {
+    Integer roomId = livingRoomReqDTO.getRoomId();
+    Integer appId = livingRoomReqDTO.getAppId();
+    String cacheKey = cacheKeyBuilder.buildLivingRoomUserSet(roomId, appId);
+    //使用scan分批查询数据，否则set元素太多容易造成redis和网络阻塞（scan会自动分成多次请求去执行）
+    Cursor<Object> cursor = redisTemplate.opsForSet().scan(cacheKey, ScanOptions.scanOptions().match("*").count(100).build());
+    List<Long> userIdList = new ArrayList<>();
+    while (cursor.hasNext()) {
+        userIdList.add((Long) cursor.next());
+    }
+    return userIdList;
+}
+```
+
+### 2 在业务消息的Router层和业务处理层实现群聊推送
+
+我们再来看一下之前的im服务的全链路图：
+<img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
+
+我们需要 **在业务消息的Router层和业务处理层实现群聊推送，并且在core-server层也进行批量处理我们router转发过来的消息**
+
+
+
+- 业务层处理我们的批量推送
+
+**qiyu-live-msg-provider：**
+
+```xml
+<dependency>
+    <groupId>org.hah</groupId>
+    <artifactId>qiyu-live-living-interface</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+
+MessageDTO：删除objectId，添加roomId：
+
+```java
+/**
+ * 通信目标用户id
+ */
+// private Long objectId;
+/**
+ * 直播间id，用于查询在直播间的用户id，实现批量推送（实际上就是用roomId查询objectIdList）
+ */
+private Integer roomId;
+```
+
+修改SingleMessageHandlerImpl：将原来的objectId的封装变为batchSend的封装：
+
+```java
+@Component
+public class SingleMessageHandlerImpl implements MessageHandler {
+    
+    @DubboReference
+    private ImRouterRpc routerRpc; 
+    @DubboReference
+    private ILivingRoomRpc livingRoomRpc;
+    
+    @Override
+    public void onMsgReceive(ImMsgBody imMsgBody) {
+        int bizCode = imMsgBody.getBizCode();
+        // 直播间的聊天消息
+        if (bizCode == ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
+            //一个人发送，n个人接收
+            //根据roomId去调用rpc方法查询直播间在线userId
+            MessageDTO messageDTO = JSON.parseObject(imMsgBody.getData(), MessageDTO.class);
+            Integer roomId = messageDTO.getRoomId();
+            LivingRoomReqDTO reqDTO = new LivingRoomReqDTO();
+            reqDTO.setRoomId(roomId);
+            reqDTO.setAppId(imMsgBody.getAppId());
+            //自己不用发
+            List<Long> userIdList = livingRoomRpc.queryUserIdsByRoomId(reqDTO).stream().filter(x -> !x.equals(imMsgBody.getUserId())).collect(Collectors.toList());
+            if (CollectionUtils.isEmpty(userIdList)) {
+                return;
+            }
+            
+            List<ImMsgBody> respMsgBodies = new ArrayList<>();
+            ImMsgBody respMsgBody = new ImMsgBody();
+            respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+            respMsgBody.setBizCode(ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("senderId", messageDTO.getUserId());
+            jsonObject.put("content", messageDTO.getContent());
+            respMsgBody.setData(JSON.toJSONString(messageDTO));
+            
+            userIdList.forEach(userId -> {
+                //设置发送目标对象的id
+                respMsgBody.setUserId(userId);
+                respMsgBodies.add(respMsgBody);
+            });
+            //将消息推送给router进行转发给im服务器
+            routerRpc.batchSendMsg(respMsgBodies);
+        }
+    }
+}
+```
+
+
+
+- Router转发层进行处理：
+
+ **qiyu-live-im-router-provider：**
+
+```java
+public interface ImRouterRpc {
+	...
+
+    /**
+     * 实现在直播间内进行消息的批量推送
+     */
+    void batchSendMsg(List<ImMsgBody> imMsgBodyList);
+}
+```
+
+```java
+@DubboService
+public class ImRouterRpcImpl implements ImRouterRpc {
+    
+    ...
+
+    @Override
+    public void batchSendMsg(List<ImMsgBody> imMsgBodyList) {
+        routerService.batchSendMsg(imMsgBodyList);
+    }
+}
+```
+
+```java
+public interface ImRouterService {
+
+    boolean sendMsg(ImMsgBody imMsgBody);
+
+    void batchSendMsg(List<ImMsgBody> imMsgBodyList);
+}
+```
+
+```java
+@Service
+public class ImRouterServiceImpl implements ImRouterService {
+
+    @DubboReference
+    private IRouterHandlerRpc routerHandlerRpc;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    /**
+     * 将从Redis中取出来的原来的im服务器的ip+端口后并存入RPC上下文，在自定义cluster中取出进行ip匹配，转发到原来的那台im服务器
+     */
+    @Override
+    public boolean sendMsg(ImMsgBody imMsgBody) {
+        String bindAddress = stringRedisTemplate.opsForValue().get(ImCoreServerConstants.IM_BIND_IP_KEY + imMsgBody.getAppId() + ":" + imMsgBody.getUserId());
+        if (StringUtils.isEmpty(bindAddress)) {
+            return false;
+        }
+        bindAddress = bindAddress.substring(0, bindAddress.indexOf("%"));//新加的：去除后面拼接的userId
+        RpcContext.getContext().set("ip", bindAddress);
+        routerHandlerRpc.sendMsg(imMsgBody);
+        return true;
+    }
+    
+    /**
+     * 不能每个ImMsgBody都调用一次RPC，因为这样将会有很大的网络消耗，
+     * 所以我们要根据IP对ImMSgBody进行分组，然后再多次批量转发
+     */
+    @Override
+    public void batchSendMsg(List<ImMsgBody> imMsgBodyList) {
+        //我们需要对IP进行分组，对相同IP服务器的userIdList进行分组，每组进行一此调用，减少网络开销
+        String cacheKeyPrefix = ImCoreServerConstants.IM_BIND_IP_KEY + imMsgBodyList.get(0).getAppId() + ":";
+        List<String> cacheKeyList = imMsgBodyList.stream().map(ImMsgBody::getUserId).map(userId -> cacheKeyPrefix + userId).collect(Collectors.toList());
+        //批量去除每个用户绑定的ip地址
+        List<String> ipList = stringRedisTemplate.opsForValue().multiGet(cacheKeyList);
+        Map<String, List<Long>> userIdMap = new HashMap<>();
+        ipList.forEach(ip -> {
+            String currentIp = ip.substring(0, ip.indexOf("%"));
+            Long userId = Long.valueOf(ip.substring(ip.indexOf("%") + 1));
+
+            List<Long> currentUserIdList = userIdMap.getOrDefault(currentIp, new ArrayList<Long>());
+            currentUserIdList.add(userId);
+            userIdMap.put(currentIp, currentUserIdList);
+        });
+        //根据注册IP对ImMsgBody进行分组
+        //将连接到同一台i地址的ImMsgBody组装到一个List中，进行统一发送
+        Map<Long, ImMsgBody> userIdMsgMap = imMsgBodyList.stream().collect(Collectors.toMap(ImMsgBody::getUserId, body -> body));
+        for (Map.Entry<String, List<Long>> entry : userIdMap.entrySet()) {
+            //设置dubbo RPC上下文
+            RpcContext.getContext().set("ip", entry.getKey());
+            List<Long> currentUserIdList = entry.getValue();
+            List<ImMsgBody> batchSendMsgBodyGroupByIpList = currentUserIdList.stream().map(userIdMsgMap::get).collect(Collectors.toList());
+            routerHandlerRpc.batchSendMsg(batchSendMsgBodyGroupByIpList);
+        }
+    }
+}
+```
+
+> 这里要修改LoginMsgHandler中的loginSuccesshandler()代码的存入IP地址的逻辑：
+>
+> 将value后面拼接上 %userId，用于上面ImRouterServiceImpl进行进行分割
+>
+> ```java
+> // 将im服务器的ip+端口地址保存到Redis，以供Router服务取出进行转发
+> stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
+>         ChannelHandlerContextCache.getServerIpAddress() + "%" + userId,
+>         2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+> ```
+
+
+
+- core-server层也进行批量处理我们router转发过来的消息
+
+```java
+/**
+ * 专门给Router层的服务进行调用的接口
+ */
+public interface IRouterHandlerRpc {
+
+    /**
+     * 按照用户id进行消息的发送
+     */
+    void sendMsg(ImMsgBody imMsgBody);
+
+    /**
+     * 批量推送消息
+     */
+    void batchSendMsg(List<ImMsgBody> imMsgBodyList);
+}
+```
+
+```java
+@DubboService
+public class RouterHandlerRpcImpl implements IRouterHandlerRpc {
+    
+    @Resource
+    private IRouterHandlerService routerHandlerService;
+    @Override
+    public void sendMsg(ImMsgBody imMsgBody) {
+        routerHandlerService.onReceive(imMsgBody);
+    }
+
+    @Override
+    public void batchSendMsg(List<ImMsgBody> imMsgBodyList) {
+        imMsgBodyList.forEach(imMsgBody -> {
+            routerHandlerService.onReceive(imMsgBody);
+        });
+        
+    }
+}
+```
+
+### 3 前端的接入
+
+**改写api模块：对anchorConfig()返回给前端的信息做一些调整：**
+
+msg-interface中的MessageDTO加入以下属性：
+
+```java
+/**
+ * 发送人名称
+ */
+private String senderName;
+/**
+ * 发送人头像
+ */
+private String senderAvatar;
+```
+
+**qiyu-live-api：**
+
+LivingRoomInitVO加入以下属性：
+
+```java
+private String nickName;
+```
+
+LivingRoomServiceImpl：
+
+```java
+@Override
+public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
+    LivingRoomRespDTO respDTO = livingRoomRpc.queryByRoomId(roomId);
+    UserDTO userDTO = userRpc.getUserById(userId);
+    LivingRoomInitVO respVO = new LivingRoomInitVO();
+    respVO.setNickName(userDTO.getNickName());
+    respVO.setUserId(userId);
+    respVO.setAvatar(StringUtils.isEmpty(userDTO.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6g6f.png" : userDTO.getAvatar());
+    if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
+        //直播间不存在，设置roomId为-1
+        respVO.setRoomId(-1);
+    }else {
+        respVO.setRoomId(respDTO.getId());
+        respVO.setRoomName(respDTO.getRoomName());
+        respVO.setAnchorId(respDTO.getAnchorId());
+        respVO.setAnchor(respDTO.getAnchorId().equals(userId));
+        respVO.setAnchorImg(respDTO.getCovertImg());
+        respVO.setDefaultBgImg(respDTO.getCovertImg());
+    }
+    return respVO;
+}
+```
+
+> 然后前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{roomId}
 
 
 

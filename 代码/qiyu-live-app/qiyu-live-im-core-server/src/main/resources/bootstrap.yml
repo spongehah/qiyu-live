@@ -8,6 +8,7 @@ spring:
       discovery:
         server-addr: nacos.server:8848
         namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        ip: 192.168.101.104
       config:
         import-check:
           enabled: false

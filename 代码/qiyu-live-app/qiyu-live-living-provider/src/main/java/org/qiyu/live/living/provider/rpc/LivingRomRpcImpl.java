@@ -33,14 +33,15 @@ public class LivingRomRpcImpl implements ILivingRoomRpc {
     }
 
     @Override
-    public List<Long> queryUserIdByRoomId(LivingRoomReqDTO livingRoomReqDTO) {
-        return null;
+    public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
+        return livingRoomService.list(livingRoomReqDTO);
     }
 
     @Override
-    public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
-        return null;
+    public List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO) {
+        return livingRoomService.queryUserIdsByRoomId(livingRoomReqDTO);
     }
+    
 
     @Override
     public LivingPkRespDTO onlinePk(LivingRoomReqDTO livingRoomReqDTO) {

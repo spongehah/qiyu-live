@@ -11,4 +11,14 @@ public class ImCoreServerProviderTopicNames {
      * 发送ack延迟消息的topic
      */
     public static final String QIYU_LIVE_IM_ACK_MSG_TOPIC = "qiyu-live-im-ack-msg-topic";
+
+    /**
+     * 用户初次登录im服务发mq
+     */
+    public static final String IM_ONLINE_TOPIC = "im-online-topic";
+
+    /**
+     * 用户断开im服务发mq
+     */
+    public static final String IM_OFFLINE_TOPIC = "im-offline-topic";
 }

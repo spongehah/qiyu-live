@@ -47,6 +47,7 @@ new Vue({
 		},
 
 		chooseLivingType: function(type, id) {
+			this.listType = type;
 			this.listLivingRoom(type);
 			if (this.currentChooseTab != null) {
 				this.currentChooseTab.classList.remove('top-title-active');
@@ -58,6 +59,7 @@ new Vue({
 		listLivingRoom: function(type) {
 			var that = this;
 			let data = new FormData();
+			this.page = 1;
 			data.append("page", this.page);
 			data.append("pageSize", this.pageSize);
 			data.append("type", type);
@@ -142,6 +144,7 @@ new Vue({
 				this.$message.error('请先登录');
 				return;
 			}
+			type = this.listType;
 			if (type == 1) {
 				window.location.href = "./living_room.html?roomId=" + roomId;
 			} else if (type == 2) {

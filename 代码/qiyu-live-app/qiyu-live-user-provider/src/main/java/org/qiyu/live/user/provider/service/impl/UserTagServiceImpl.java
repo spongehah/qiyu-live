@@ -20,6 +20,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserTagServiceImpl extends ServiceImpl<IUserTagMapper, UserTagPo> implements IUserTagService {
@@ -121,7 +122,7 @@ public class UserTagServiceImpl extends ServiceImpl<IUserTagMapper, UserTagPo> i
             return null;
         }
         userTagDTO = BeanUtil.copyProperties(userTagPo, UserTagDTO.class);
-        userTagDTORedisTemplate.opsForValue().set(key, userTagDTO);
+        userTagDTORedisTemplate.opsForValue().set(key, userTagDTO, 30L, TimeUnit.MINUTES);
         return userTagDTO;
     }
 }
