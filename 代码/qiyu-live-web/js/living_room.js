@@ -293,6 +293,9 @@ new Vue({
                             if(that.initInfo.userId == "285608972927369200") {
                                 that.initInfo.userId = "285608972927369217"
                             }
+                            if(this.initInfo.anchorId == "285608972927369200") {
+                                that.initInfo.anchorId = "285608972927369217"
+                            }
                             that.connectImServer();
                             that.redPacketConfigCode = resp.data.redPacketConfigCode;
                             that.showPrepareBtn = (that.redPacketConfigCode!=null);
@@ -372,10 +375,11 @@ new Vue({
                 this.startHeartBeatJob();
             } else if (wsData.code == 1003) {
                 let respData = JSON.parse(utf8ByteToUnicodeStr(wsData.body));
+                console.log(respData);
                 //属于直播间内的聊天消息
                 if(respData.bizCode==5555) {
                     let respMsg = JSON.parse(respData.data);
-                    let sendMsg = {"content": respMsg.content, "senderName": respMsg.senderName, "senderImg": respMsg.senderAvtar};
+                    let sendMsg = {"content": respMsg.content, "senderName": respMsg.senderName, "senderImg": respMsg.senderAvatar};
                     let msgWrapper = {"msgType": 1, "msg": sendMsg};
                     console.log(sendMsg);
                     this.chatList.push(msgWrapper);
@@ -433,7 +437,7 @@ new Vue({
             let heartBeatJsonStr = {"magic": 19231, "code": 1004, "len": bodyStr.length, "body": bodyStr};
             setInterval(function () {
                 that.websocketSend(JSON.stringify(heartBeatJsonStr));
-            }, 3000);
+            }, 30000);
         },
 
         closeLivingRoom: function() {
@@ -460,7 +464,7 @@ new Vue({
             let msgWrapper = {"msgType": 1, "msg": sendMsg};
             this.chatList.push(msgWrapper);
             //发送评论消息给到im服务器
-            let msgBody = {"roomId":this.roomId,"type":1,"content":this.form.review,  "senderName": this.initInfo.nickName, "senderAvtar": this.initInfo.avatar};
+            let msgBody = {"roomId":this.roomId,"type":1,"content":this.form.review,  "senderName": this.initInfo.nickName, "senderAvatar": this.initInfo.avatar};
             console.log(this.initInfo);
             let jsonStr = {"userId": this.initInfo.userId, "appId": 10001,"bizCode":5555,"data":JSON.stringify(msgBody)};
             let bodyStr = JSON.stringify(jsonStr);

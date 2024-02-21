@@ -256,7 +256,7 @@ new Vue({
                 //属于直播间内的聊天消息
                 if (respData.bizCode == 5555) {
                     let respMsg = JSON.parse(respData.data);
-                    let sendMsg = { "content": respMsg.content, "senderName": respMsg.senderName, "senderImg": respMsg.senderAvtar };
+                    let sendMsg = { "content": respMsg.content, "senderName": respMsg.senderName, "senderImg": respMsg.senderAvatar };
                     let msgWrapper = { "msgType": 1, "msg": sendMsg };
                     console.log(sendMsg);
                     this.chatList.push(msgWrapper);
@@ -348,7 +348,7 @@ new Vue({
             let msgWrapper = { "msgType": 1, "msg": sendMsg };
             this.chatList.push(msgWrapper);
             //发送评论消息给到im服务器
-            let msgBody = { "roomId": this.roomId, "type": 1, "content": this.form.review, "senderName": this.initInfo.watcherNickName, "senderAvtar": this.initInfo.watcherAvatar };
+            let msgBody = { "roomId": this.roomId, "type": 1, "content": this.form.review, "senderName": this.initInfo.watcherNickName, "senderAvatar": this.initInfo.watcherAvatar };
             console.log(this.initInfo);
             let jsonStr = { "userId": this.initInfo.userId, "appId": 10001, "bizCode": 5555, "data": JSON.stringify(msgBody) };
             let bodyStr = JSON.stringify(jsonStr);

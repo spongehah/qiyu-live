@@ -10,7 +10,7 @@ import org.qiyu.live.user.interfaces.IUserTagRpc;
 import org.springframework.stereotype.Service;
 
 @Service
-public class IHomePageServiceImpl implements IHomePageService {
+public class HomePageServiceImpl implements IHomePageService {
 
     @DubboReference
     private IUserRpc userRpc;

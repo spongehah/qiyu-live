@@ -1,10 +1,5 @@
 package org.qiyu.live.web.starter.constants;
 
-/**
- * @Author idea
- * @Date: Created in 15:43 2023/8/2
- * @Description
- */
 public enum ErrorAppIdEnum {
 
     QIYU_API_ERROR(101,"qiyu-live-api");

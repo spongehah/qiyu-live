@@ -5898,6 +5898,29 @@ public class UserLoginController {
 }
 ```
 
+> 因为新接入了account模块进行登录token的存入与检查，所以原来userPhoneServiceImpl里的token就不用创建了
+>
+> ```java
+> @Override
+> public UserLoginDTO login(String phone) {
+>     ...
+>     if (userPhoneDTO != null) {
+>         return UserLoginDTO.loginSuccess(userPhoneDTO.getUserId(),"");
+>     ...
+> }
+> 
+> /**
+>  * 注册新手机号用户
+>  *
+>  * @return
+>  */
+> private UserLoginDTO registerAndLogin(String phone) {
+>     ...
+>     // return UserLoginDTO.loginSuccess(userId, this.createAndSaveLoginToken(userId));
+>     return UserLoginDTO.loginSuccess(userId, null);
+> }
+> ```
+
 ### 6 网关过滤器接入鉴权校验
 
 **qiyu-live-common-interface：**

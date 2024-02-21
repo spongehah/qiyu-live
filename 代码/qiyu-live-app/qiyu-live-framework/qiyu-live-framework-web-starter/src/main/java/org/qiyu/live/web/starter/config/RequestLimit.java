@@ -2,7 +2,6 @@ package org.qiyu.live.web.starter.config;
 
 import java.lang.annotation.*;
 
-
 @Documented
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

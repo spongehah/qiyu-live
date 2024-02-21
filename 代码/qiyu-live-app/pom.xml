@@ -33,6 +33,10 @@
         <module>qiyu-live-im-router-provider</module>
         <module>qiyu-live-living-interface</module>
         <module>qiyu-live-living-provider</module>
+        <module>qiyu-live-gift-interface</module>
+        <module>qiyu-live-gift-provider</module>
+        <module>qiyu-live-bank-interface</module>
+        <module>qiyu-live-bank-provider</module>
     </modules>
 
     <properties>

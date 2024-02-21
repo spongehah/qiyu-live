@@ -78,7 +78,8 @@ public class UserPhoneServiceImpl implements IUserPhoneService {
         userPhoneMapper.insert(userPhonePO);
         // 需要删除空值对象，因为我们查询有无对应用户的时候，缓存了空对象，这里我们创建了就可以删除了
         redisTemplate.delete(userProviderCacheKeyBuilder.buildUserPhoneObjKey(phone));
-        return UserLoginDTO.loginSuccess(userId, this.createAndSaveLoginToken(userId));
+        // return UserLoginDTO.loginSuccess(userId, this.createAndSaveLoginToken(userId));
+        return UserLoginDTO.loginSuccess(userId, null);
     }
 
     private String createAndSaveLoginToken(Long userId) {

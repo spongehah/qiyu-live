@@ -1,9 +1,7 @@
 package org.qiyu.live.web.starter.error;
 
 /**
- * @Author idea
- * @Date: Created in 11:25 2023/8/2
- * @Description
+ * 自定义异常类的异常信息的枚举类，实现了 自定义异常的接口规范
  */
 public enum BizBaseErrorEnum implements QiyuBaseError{
 

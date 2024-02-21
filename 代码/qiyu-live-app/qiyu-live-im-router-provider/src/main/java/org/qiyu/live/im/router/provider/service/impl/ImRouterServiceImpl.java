@@ -30,6 +30,7 @@ public class ImRouterServiceImpl implements ImRouterService {
      */
     @Override
     public boolean sendMsg(ImMsgBody imMsgBody) {
+        System.out.println("[ImRouterServiceImpl1]");
         String bindAddress = stringRedisTemplate.opsForValue().get(ImCoreServerConstants.IM_BIND_IP_KEY + imMsgBody.getAppId() + ":" + imMsgBody.getUserId());
         if (StringUtils.isEmpty(bindAddress)) {
             return false;
@@ -37,6 +38,7 @@ public class ImRouterServiceImpl implements ImRouterService {
         bindAddress = bindAddress.substring(0, bindAddress.indexOf("%"));//新加的：去除后面拼接的userId
         RpcContext.getContext().set("ip", bindAddress);
         routerHandlerRpc.sendMsg(imMsgBody);
+        System.out.println("[ImRouterServiceImpl2]");
         return true;
     }
 

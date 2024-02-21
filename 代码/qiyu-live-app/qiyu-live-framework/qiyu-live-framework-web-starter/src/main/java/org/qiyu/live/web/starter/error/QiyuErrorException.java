@@ -1,12 +1,14 @@
 package org.qiyu.live.web.starter.error;
 
+import java.io.Serial;
+
 /**
- * @Author idea
- * @Date: Created in 11:15 2023/8/2
- * @Description
+ * 自定义异常类
  */
 public class QiyuErrorException extends RuntimeException{
 
+    @Serial
+    private static final long serialVersionUID = -5253282130382649365L;
     private int errorCode;
     private String errorMsg;
 

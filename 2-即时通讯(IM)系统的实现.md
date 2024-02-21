@@ -4699,6 +4699,43 @@ public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
 </dependency>
 ```
 
+> 在redis-starter中加入keyBuilder：
+>
+> ```java
+> @Configuration
+> @Conditional(RedisKeyLoadMatch.class)
+> public class LivingProviderCacheKeyBuilder extends RedisKeyBuilder {
+> 
+>     private static String LIVING_ROOM_LIST = "living_room_list";
+>     private static String LIVING_ROOM_OBJ = "living_room_obj";
+>     private static String REFRESH_LIVING_ROOM_LIST_LOCK = "refresh_living_room_list_lock";
+>     private static String LIVING_ROOM_USER_SET = "living_room_user_set";
+>     private static String LIVING_ONLINE_PK = "living_online_pk";
+> 
+>     public String buildLivingOnlinePk(Integer roomId) {
+>         return super.getPrefix() + LIVING_ONLINE_PK + super.getSplitItem() + roomId;
+>     }
+> 
+>     public String buildLivingRoomUserSet(Integer roomId, Integer appId) {
+>         return super.getPrefix() + LIVING_ROOM_USER_SET + super.getSplitItem() + appId + super.getSplitItem() + roomId;
+>     }
+> 
+>     public String buildRefreshLivingRoomListLock() {
+>         return super.getPrefix() + REFRESH_LIVING_ROOM_LIST_LOCK;
+>     }
+> 
+>     public String buildLivingRoomObj(Integer roomId) {
+>         return super.getPrefix() + LIVING_ROOM_OBJ + super.getSplitItem() + roomId;
+>     }
+> 
+>     public String buildLivingRoomList(Integer type) {
+>         return super.getPrefix() + LIVING_ROOM_LIST + super.getSplitItem() + type;
+>     }
+> }
+> ```
+>
+> 记得在META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports中加入对应的类名
+
 nacos配置文件添加redis配置：
 
 ```yaml
@@ -5909,19 +5946,5 @@ public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
 ```
 
 > 然后前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{roomId}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # end

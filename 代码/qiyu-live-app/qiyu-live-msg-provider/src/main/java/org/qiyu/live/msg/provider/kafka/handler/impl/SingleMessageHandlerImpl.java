@@ -1,6 +1,5 @@
 package org.qiyu.live.msg.provider.kafka.handler.impl;
 
-import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson2.JSON;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.im.constants.AppIdEnum;
@@ -9,7 +8,7 @@ import org.qiyu.live.im.router.interfaces.ImRouterRpc;
 import org.qiyu.live.living.interfaces.dto.LivingRoomReqDTO;
 import org.qiyu.live.living.interfaces.rpc.ILivingRoomRpc;
 import org.qiyu.live.msg.provider.dto.MessageDTO;
-import org.qiyu.live.msg.provider.enums.ImMsgBizCodeEum;
+import org.qiyu.live.im.router.constants.ImMsgBizCodeEnum;
 import org.qiyu.live.msg.provider.kafka.handler.MessageHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -30,7 +29,7 @@ public class SingleMessageHandlerImpl implements MessageHandler {
     public void onMsgReceive(ImMsgBody imMsgBody) {
         int bizCode = imMsgBody.getBizCode();
         // 直播间的聊天消息
-        if (bizCode == ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
+        if (bizCode == ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
             //一个人发送，n个人接收
             //根据roomId去调用rpc方法查询直播间在线userId
             MessageDTO messageDTO = JSON.parseObject(imMsgBody.getData(), MessageDTO.class);
@@ -48,7 +47,7 @@ public class SingleMessageHandlerImpl implements MessageHandler {
             List<ImMsgBody> respMsgBodies = new ArrayList<>();
             ImMsgBody respMsgBody = new ImMsgBody();
             respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
-            respMsgBody.setBizCode(ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
+            respMsgBody.setBizCode(ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
             respMsgBody.setData(JSON.toJSONString(messageDTO));
             
             userIdList.forEach(userId -> {

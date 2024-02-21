@@ -1,9 +1,7 @@
 package org.qiyu.live.web.starter.error;
 
 /**
- * @Author idea
- * @Date: Created in 11:26 2023/8/2
- * @Description
+ * 我们自定义异常的接口规范
  */
 public interface QiyuBaseError {
 
