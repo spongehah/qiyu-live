@@ -4741,7 +4741,7 @@ nacos配置文件添加redis配置：
 ```yaml
   data:
     redis:
-      host: 47.120.12.106
+      host: h
       port: 6379
       password: 123456
       lettuce:
