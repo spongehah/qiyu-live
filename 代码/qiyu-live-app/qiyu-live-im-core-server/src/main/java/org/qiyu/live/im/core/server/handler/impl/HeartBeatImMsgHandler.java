@@ -47,7 +47,7 @@ public class HeartBeatImMsgHandler implements SimpleHandler {
         this.removeExpireRecord(redisKey);
         redisTemplate.expire(redisKey, 5L, TimeUnit.MINUTES);
         // 将以供Router服务取出进行转发的im服务器的ip+端口地址进行延时
-        redisTemplate.expire(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId, 2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+        redisTemplate.expire(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId, 5 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
         //回写给客户端
         ImMsgBody respBody = new ImMsgBody();
         respBody.setUserId(userId);

@@ -1,6 +1,6 @@
 spring:
   application:
-    name: qiyu-live-im-core-server
+    name: qiyu-live-bank-api
   cloud:
     nacos:
       username: qiyu
@@ -8,7 +8,6 @@ spring:
       discovery:
         server-addr: nacos.server:8848
         namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
-        ip: 192.168.101.105
       config:
         import-check:
           enabled: false
@@ -22,5 +21,3 @@ spring:
   config:
     import:
       - optional:nacos:${spring.application.name}.yml
-    
-    

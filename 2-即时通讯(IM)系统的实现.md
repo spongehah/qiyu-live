@@ -5052,12 +5052,13 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
 
     @Value("${qiyu.im.ws.port}")
     private int port;
-    @Value("${spring.cloud.nacos.discovery.ip}")
-    private String serverIp;
+    
     @DubboReference
     private ImTokenRpc imTokenRpc;
     @Resource
     private LoginMsgHandler loginMsgHandler;
+    @Resource
+    private Environment environment;
 
     private WebSocketServerHandshaker webSocketServerHandshaker;
 
@@ -5077,6 +5078,7 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void handlerHttpRequest(ChannelHandlerContext ctx, FullHttpRequest msg) {
+        String serverIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");
         String webSocketUrl = "ws://" + serverIp + ":" + port;
         // 构造握手响应返回
         WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(webSocketUrl, null, false);
@@ -5228,8 +5230,6 @@ public class WsNettyImServerStarter implements InitializingBean {
 
 6 更改配置文件：
 
-在bootstrap.yml中加入spring.cloud.nacos.discovery.ip的配置，配置为前面我们im服务器注册到DUBBO/NACOS的ip地址
-
 在nacos的配置文件中新增：qiyu.im.ws.port = 8086
 
 7 编写api模块，返回给前端建立连接要用的token、serverAddress等信息
@@ -5329,6 +5329,7 @@ public class ImServiceImpl implements ImService {
 
 	private void handlerHttpRequest(ChannelHandlerContext ctx, FullHttpRequest msg) {
         // 前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{param}
+        String serverIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");
         String webSocketUrl = "ws://" + serverIp + ":" + port;
         // 构造握手响应返回
         WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(webSocketUrl, null, false);
@@ -5659,7 +5660,7 @@ public List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO) {
 }
 ```
 
-### 2 在业务消息的Router层和业务处理层实现群聊推送
+### 2 在业务消息的业务处理层和Router层实现群聊推送
 
 我们再来看一下之前的im服务的全链路图：
 <img src="image/2-即时通讯(IM)系统的实现.assets/image-20240215171926885.png" alt="image-20240215171926885" style="zoom:50%;" />
@@ -5827,7 +5828,7 @@ public class ImRouterServiceImpl implements ImRouterService {
             userIdMap.put(currentIp, currentUserIdList);
         });
         //根据注册IP对ImMsgBody进行分组
-        //将连接到同一台i地址的ImMsgBody组装到一个List中，进行统一发送
+        //将连接到同一台ip地址的ImMsgBody组装到一个List中，进行统一发送
         Map<Long, ImMsgBody> userIdMsgMap = imMsgBodyList.stream().collect(Collectors.toMap(ImMsgBody::getUserId, body -> body));
         for (Map.Entry<String, List<Long>> entry : userIdMap.entrySet()) {
             //设置dubbo RPC上下文

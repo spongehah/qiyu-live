@@ -100,7 +100,7 @@ public class LoginMsgHandler implements SimpleHandler {
         // 将im服务器的ip+端口地址保存到Redis，以供Router服务取出进行转发
         stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
                 ChannelHandlerContextCache.getServerIpAddress() + "%" + userId,
-                2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+                5 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
         LOGGER.info("[LoginMsgHandler] login success, userId is {}, appId is {}", userId, appId);
         ctx.writeAndFlush(respMsg);
         sendLoginMQ(userId, appId, roomId);

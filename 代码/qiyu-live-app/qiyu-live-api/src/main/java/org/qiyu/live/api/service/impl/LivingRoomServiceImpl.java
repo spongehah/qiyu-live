@@ -64,7 +64,6 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
             respVO.setAnchorId(respDTO.getAnchorId());
             respVO.setAnchor(respDTO.getAnchorId().equals(userId));
             respVO.setAnchorImg(respDTO.getCovertImg());
-            respVO.setDefaultBgImg(respDTO.getCovertImg());
         }
         return respVO;
     }

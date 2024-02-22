@@ -1,0 +1,11 @@
+spring:
+  data:
+    redis:
+      host: 47.120.12.106
+      port: 6379
+      password: zw2635879218@
+      lettuce:
+        pool:
+          min-idle: 10   #最小空闲连接
+          max-active: 100  #最大连接
+          max-idle: 10   #最大空闲连接

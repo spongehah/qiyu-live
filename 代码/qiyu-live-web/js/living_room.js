@@ -290,12 +290,12 @@ new Vue({
                     if (isSuccess(resp)) {
                         if(resp.data.roomId>0) {
                             that.initInfo = resp.data;
-                            if(that.initInfo.userId == "285608972927369200") {
-                                that.initInfo.userId = "285608972927369217"
-                            }
-                            if(this.initInfo.anchorId == "285608972927369200") {
-                                that.initInfo.anchorId = "285608972927369217"
-                            }
+                            // if(that.initInfo.userId == "285608972927369200") {
+                            //     that.initInfo.userId = "285608972927369217"
+                            // }
+                            // if(this.initInfo.anchorId == "285608972927369200") {
+                            //     that.initInfo.anchorId = "285608972927369217"
+                            // }
                             that.connectImServer();
                             that.redPacketConfigCode = resp.data.redPacketConfigCode;
                             that.showPrepareBtn = (that.redPacketConfigCode!=null);

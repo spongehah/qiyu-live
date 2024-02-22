@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,12 +32,14 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
 
     @Value("${qiyu.im.ws.port}")
     private int port;
-    @Value("${spring.cloud.nacos.discovery.ip}")
-    private String serverIp;
+    // @Value("${spring.cloud.nacos.discovery.ip}")
+    // private String serverIp;
     @DubboReference
     private ImTokenRpc imTokenRpc;
     @Resource
     private LoginMsgHandler loginMsgHandler;
+    @Resource
+    private Environment environment;
 
     private WebSocketServerHandshaker webSocketServerHandshaker;
 
@@ -57,6 +60,7 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
 
     private void handlerHttpRequest(ChannelHandlerContext ctx, FullHttpRequest msg) {
         // 前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{param}
+        String serverIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");
         String webSocketUrl = "ws://" + serverIp + ":" + port;
         // 构造握手响应返回
         WebSocketServerHandshakerFactory wsFactory = new WebSocketServerHandshakerFactory(webSocketUrl, null, false);
