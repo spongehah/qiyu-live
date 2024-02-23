@@ -1,14 +1,20 @@
 package org.qiyu.live.living.provider.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.Resource;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.idea.qiyu.live.framework.redis.starter.key.LivingProviderCacheKeyBuilder;
 import org.qiyu.live.common.interfaces.dto.PageWrapper;
 import org.qiyu.live.common.interfaces.enums.CommonStatusEnum;
 import org.qiyu.live.common.interfaces.utils.ConvertBeanUtils;
+import org.qiyu.live.im.constants.AppIdEnum;
 import org.qiyu.live.im.core.server.interfaces.dto.ImOfflineDTO;
 import org.qiyu.live.im.core.server.interfaces.dto.ImOnlineDTO;
+import org.qiyu.live.im.dto.ImMsgBody;
+import org.qiyu.live.im.router.constants.ImMsgBizCodeEnum;
+import org.qiyu.live.im.router.interfaces.ImRouterRpc;
 import org.qiyu.live.living.interfaces.dto.LivingPkRespDTO;
 import org.qiyu.live.living.interfaces.dto.LivingRoomReqDTO;
 import org.qiyu.live.living.interfaces.dto.LivingRoomRespDTO;
@@ -29,6 +35,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 public class LivingRoomServiceImpl implements ILivingRoomService {
@@ -41,6 +48,8 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private LivingProviderCacheKeyBuilder cacheKeyBuilder;
+    @DubboReference
+    private ImRouterRpc routerRpc;
 
     @Override
     public Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO) {
@@ -126,9 +135,9 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(LivingRoomPO::getType, type);
         queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
-        //按照时间倒序展示
+        // 按照时间倒序展示
         queryWrapper.orderByDesc(LivingRoomPO::getStartTime);
-        //为性能做保证，只查询1000个
+        // 为性能做保证，只查询1000个
         queryWrapper.last("limit 1000");
         return ConvertBeanUtils.convertList(livingRoomMapper.selectList(queryWrapper), LivingRoomRespDTO.class);
     }
@@ -150,6 +159,12 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         Integer roomId = imOfflineDTO.getRoomId();
         String cacheKey = cacheKeyBuilder.buildLivingRoomUserSet(roomId, appId);
         redisTemplate.opsForSet().remove(cacheKey, userId);
+
+        // 新增PK直播间 下线调用
+        LivingRoomReqDTO reqDTO = new LivingRoomReqDTO();
+        reqDTO.setRoomId(roomId);
+        reqDTO.setPkObjId(userId);
+        this.offlinePk(reqDTO);
     }
 
     @Override
@@ -157,7 +172,7 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         Integer roomId = livingRoomReqDTO.getRoomId();
         Integer appId = livingRoomReqDTO.getAppId();
         String cacheKey = cacheKeyBuilder.buildLivingRoomUserSet(roomId, appId);
-        //使用scan分批查询数据，否则set元素太多容易造成redis和网络阻塞（scan会自动分成多次请求去执行）
+        // 使用scan分批查询数据，否则set元素太多容易造成redis和网络阻塞（scan会自动分成多次请求去执行）
         Cursor<Object> cursor = redisTemplate.opsForSet().scan(cacheKey, ScanOptions.scanOptions().match("*").count(100).build());
         List<Long> userIdList = new ArrayList<>();
         while (cursor.hasNext()) {
@@ -168,16 +183,63 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
 
     @Override
     public LivingPkRespDTO onlinePk(LivingRoomReqDTO livingRoomReqDTO) {
-        return null;
-    }
-
-    @Override
-    public Long queryOnlinePkUserId(Integer roomId) {
-        return null;
+        LivingRoomRespDTO currentLivingRoom = this.queryByRoomId(livingRoomReqDTO.getRoomId());
+        LivingPkRespDTO respDTO = new LivingPkRespDTO();
+        respDTO.setOnlineStatus(false);
+        if (currentLivingRoom.getAnchorId().equals(livingRoomReqDTO.getPkObjId())) {
+            respDTO.setMsg("主播不可以连线参与PK");
+            return respDTO;
+        }
+        String cacheKey = cacheKeyBuilder.buildLivingOnlinePk(livingRoomReqDTO.getRoomId());
+        // 使用setIfAbsent防止被后来者覆盖
+        Boolean tryOnline = redisTemplate.opsForValue().setIfAbsent(cacheKey, livingRoomReqDTO.getPkObjId(), 12L, TimeUnit.HOURS);
+        if (Boolean.TRUE.equals(tryOnline)) {
+            // 通知直播间所有人，有人上线PK了
+            List<Long> userIdList = this.queryUserIdsByRoomId(livingRoomReqDTO);
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("pkObjId", livingRoomReqDTO.getPkObjId());
+            jsonObject.put("pkObjAvatar", "../svga/img/爱心.png");
+            this.batchSendImMsg(userIdList, ImMsgBizCodeEnum.LIVING_ROOM_PK_ONLINE.getCode(), jsonObject);
+            respDTO.setMsg("连线成功");
+            respDTO.setOnlineStatus(true);
+            return respDTO;
+        }
+        respDTO.setMsg("目前有人在线，请稍后再试");
+        return respDTO;
     }
 
     @Override
     public boolean offlinePk(LivingRoomReqDTO livingRoomReqDTO) {
-        return false;
+        Integer roomId = livingRoomReqDTO.getRoomId();
+        Long pkObjId = this.queryOnlinePkUserId(roomId);
+        // 如果他是pkObjId本人，才删除
+        if (!livingRoomReqDTO.getPkObjId().equals(pkObjId)) {
+            System.out.println("删除失败");
+            return false;
+        }
+        System.out.println("删除成功");
+        String cacheKey = cacheKeyBuilder.buildLivingOnlinePk(roomId);
+        return Boolean.TRUE.equals(redisTemplate.delete(cacheKey));
+    }
+
+    @Override
+    public Long queryOnlinePkUserId(Integer roomId) {
+        String cacheKey = cacheKeyBuilder.buildLivingOnlinePk(roomId);
+        return (Long) redisTemplate.opsForValue().get(cacheKey);
+    }
+
+    /**
+     * 批量发送im消息
+     */
+    private void batchSendImMsg(List<Long> userIdList, Integer bizCode, JSONObject jsonObject) {
+        List<ImMsgBody> imMsgBodies = userIdList.stream().map(userId -> {
+            ImMsgBody imMsgBody = new ImMsgBody();
+            imMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+            imMsgBody.setBizCode(bizCode);
+            imMsgBody.setData(jsonObject.toJSONString());
+            imMsgBody.setUserId(userId);
+            return imMsgBody;
+        }).collect(Collectors.toList());
+        routerRpc.batchSendMsg(imMsgBodies);
     }
 }

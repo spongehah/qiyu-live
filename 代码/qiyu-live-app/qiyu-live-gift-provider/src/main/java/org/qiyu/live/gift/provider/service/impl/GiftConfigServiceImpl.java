@@ -54,13 +54,17 @@ public class GiftConfigServiceImpl implements IGiftConfigService {
         queryWrapper.eq(GiftConfigPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
         List<GiftConfigPO> giftConfigPOList = giftConfigMapper.selectList(queryWrapper);
         giftConfigDTOS = ConvertBeanUtils.convertList(giftConfigPOList, GiftConfigDTO.class);
-        if (giftConfigDTOS == null) {
+        if (CollectionUtils.isEmpty(giftConfigDTOS)) {
             redisTemplate.opsForList().leftPush(cacheKey, new GiftConfigDTO());
             redisTemplate.expire(cacheKey, 1L, TimeUnit.MINUTES);
             return Collections.emptyList();
         }
-        redisTemplate.opsForList().leftPushAll(cacheKey, giftConfigDTOS.toArray());
-        redisTemplate.expire(cacheKey, 30L, TimeUnit.MINUTES);
+        // 往Redis初始化List时，要上锁，避免重复写入造成数据重复
+        Boolean isLock = redisTemplate.opsForValue().setIfAbsent(cacheKeyBuilder.buildGiftListLockCacheKey(), 1, 3L, TimeUnit.SECONDS);
+        if (Boolean.TRUE.equals(isLock)) {
+            redisTemplate.opsForList().leftPushAll(cacheKey, giftConfigDTOS.toArray());
+            redisTemplate.expire(cacheKey, 30L, TimeUnit.MINUTES);
+        }
         return giftConfigDTOS;
     }
 

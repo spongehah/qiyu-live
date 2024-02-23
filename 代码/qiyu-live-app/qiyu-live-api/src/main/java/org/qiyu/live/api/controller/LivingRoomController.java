@@ -5,6 +5,7 @@ import org.qiyu.live.api.error.ApiErrorEnum;
 import org.qiyu.live.api.service.ILivingRoomService;
 import org.qiyu.live.api.vo.LivingRoomInitVO;
 import org.qiyu.live.api.vo.req.LivingRoomReqVO;
+import org.qiyu.live.api.vo.req.OnlinePKReqVO;
 import org.qiyu.live.common.interfaces.vo.WebResponseVO;
 import org.qiyu.live.web.starter.config.RequestLimit;
 import org.qiyu.live.web.starter.context.QiyuRequestContext;
@@ -55,5 +56,12 @@ public class LivingRoomController {
         ErrorAssert.isTure(livingRoomReqVO != null || livingRoomReqVO.getType() != null, ApiErrorEnum.LIVING_ROOM_TYPE_MISSING);
         ErrorAssert.isTure(livingRoomReqVO.getPage() > 0 || livingRoomReqVO.getPageSize() <= 100, BizBaseErrorEnum.PARAM_ERROR);
         return WebResponseVO.success(livingRoomService.list(livingRoomReqVO));
+    }
+    
+    @PostMapping("/onlinePK")
+    @RequestLimit(limit = 1, second = 3)
+    public WebResponseVO onlinePk(OnlinePKReqVO onlinePKReqVO) {
+        ErrorAssert.isNotNull(onlinePKReqVO.getRoomId(), BizBaseErrorEnum.PARAM_ERROR);
+        return WebResponseVO.success(livingRoomService.onlinePK(onlinePKReqVO));
     }
 }

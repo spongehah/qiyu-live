@@ -52,7 +52,6 @@ public class LogoutMsgHandler implements SimpleHandler {
         }
         // 将IM消息回写给客户端
         logoutHandler(ctx, userId, appId);
-        sendLogoutMQ(ctx, userId, appId);
     }
 
     public void logoutHandler(ChannelHandlerContext ctx, Long userId, Integer appId) {
@@ -63,6 +62,7 @@ public class LogoutMsgHandler implements SimpleHandler {
         ctx.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGOUT_MSG.getCode(), JSON.toJSONString(respBody)));
         LOGGER.info("[LogoutMsgHandler] logout success, userId is {}, appId is {}", userId, appId);
         handlerLogout(userId, appId);
+        sendLogoutMQ(ctx, userId, appId);
         ImContextUtils.removeUserId(ctx);
         ImContextUtils.removeAppId(ctx);
         ImContextUtils.removeRoomId(ctx);

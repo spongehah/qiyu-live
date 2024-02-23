@@ -321,7 +321,7 @@ new Vue({
             let heartBeatJsonStr = { "magic": 19231, "code": 1004, "len": bodyStr.length, "body": bodyStr };
             setInterval(function () {
                 that.websocketSend(JSON.stringify(heartBeatJsonStr));
-            }, 3000);
+            }, 30000);
         },
 
         closeLivingRoom: function () {

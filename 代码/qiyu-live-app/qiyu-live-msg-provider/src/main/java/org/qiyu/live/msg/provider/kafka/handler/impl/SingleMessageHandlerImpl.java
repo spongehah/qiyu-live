@@ -45,12 +45,11 @@ public class SingleMessageHandlerImpl implements MessageHandler {
             }
             
             List<ImMsgBody> respMsgBodies = new ArrayList<>();
-            ImMsgBody respMsgBody = new ImMsgBody();
-            respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
-            respMsgBody.setBizCode(ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
-            respMsgBody.setData(JSON.toJSONString(messageDTO));
-            
             userIdList.forEach(userId -> {
+                ImMsgBody respMsgBody = new ImMsgBody();
+                respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                respMsgBody.setBizCode(ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
+                respMsgBody.setData(JSON.toJSONString(messageDTO));
                 //设置发送目标对象的id
                 respMsgBody.setUserId(userId);
                 respMsgBodies.add(respMsgBody);

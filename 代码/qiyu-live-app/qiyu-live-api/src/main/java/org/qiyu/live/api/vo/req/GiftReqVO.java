@@ -9,4 +9,5 @@ public class GiftReqVO {
     private Integer roomId;
     private Long senderUserId;
     private Long receiverId;
+    private Integer type;
 }

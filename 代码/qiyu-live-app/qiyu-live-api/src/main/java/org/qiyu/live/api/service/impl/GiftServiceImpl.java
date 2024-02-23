@@ -55,9 +55,14 @@ public class GiftServiceImpl implements IGiftService {
         sendGiftMq.setReceiverId(giftReqVO.getReceiverId());
         sendGiftMq.setPrice(giftConfigDTO.getPrice());
         sendGiftMq.setUrl(giftConfigDTO.getSvgaUrl());
+        sendGiftMq.setType(giftReqVO.getType());
         // 设置唯一标识UUID，防止重复消费
         sendGiftMq.setUuid(UUID.randomUUID().toString());
-        CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(GiftProviderTopicNames.SEND_GIFT, JSON.toJSONString(sendGiftMq));
+        CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(
+                GiftProviderTopicNames.SEND_GIFT,
+                // giftReqVO.getRoomId().toString(), //指定key，将相同roomId的送礼消息发送到一个分区，避免PK送礼消息出现乱序
+                JSON.toJSONString(sendGiftMq)
+        );
         sendResult.whenComplete((v, e) -> {
             if (e == null) {
                 LOGGER.info("[gift-send] send result is {}", sendResult);

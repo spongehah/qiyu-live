@@ -11,10 +11,7 @@ import java.util.List;
 public interface ILivingRoomRpc {
 
     /**
-     * 根据用户id查询是否正在开播
-     *
-     * @param roomId
-     * @return
+     * 根据roomId查询直播间
      */
     LivingRoomRespDTO queryByRoomId(Integer roomId);
 
@@ -49,22 +46,11 @@ public interface ILivingRoomRpc {
      * @return
      */
     List<Long> queryUserIdsByRoomId(LivingRoomReqDTO livingRoomReqDTO);
-    
-    /**
-     * 用户在pk直播间中，连上线请求
-     *
-     * @param livingRoomReqDTO
-     * @return
-     */
-    LivingPkRespDTO onlinePk(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
-     * 根据roomId查询当前pk人是谁
-     *
-     * @param roomId
-     * @return
+     * 当PK直播间连上线准备PK时，调用该请求
      */
-    Long queryOnlinePkUserId(Integer roomId);
+    LivingPkRespDTO onlinePK(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
      * 用户在pk直播间下线
@@ -73,4 +59,9 @@ public interface ILivingRoomRpc {
      * @return
      */
     boolean offlinePk(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
+     * 根据roomId查询当前pk人是谁
+     */
+    Long queryOnlinePkUserId(Integer roomId);
 }

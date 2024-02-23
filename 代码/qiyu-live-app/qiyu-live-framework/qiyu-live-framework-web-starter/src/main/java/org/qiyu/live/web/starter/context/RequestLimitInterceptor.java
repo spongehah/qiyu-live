@@ -22,43 +22,44 @@ public class RequestLimitInterceptor implements HandlerInterceptor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RequestLimitInterceptor.class);
 
-    @Resource
+    // @Resource
     private RedisTemplate<String, Object> redisTemplate;
     @Value("${spring.application.name}")
     private String applicationName;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        if (handler instanceof HandlerMethod) {
-            HandlerMethod handlerMethod = (HandlerMethod) handler;
-            // 查看有无 @RequestLimit 注解标识该方法
-            boolean hasLimit = handlerMethod.getMethod().isAnnotationPresent(RequestLimit.class);
-            if (hasLimit) {
-                RequestLimit requestLimit = handlerMethod.getMethod().getAnnotation(RequestLimit.class);
-                Long userId = QiyuRequestContext.getUserId();
-                // 没有userId标识是网关通过的白名单请求，放行
-                if (userId == null) {
-                    return true;
-                }
-                //(userId + url + requestValue) base64 -> String(key)
-                String cacheKey = applicationName + ":" + userId + ":" + request.getRequestURI();
-                int limit = requestLimit.limit();// 限制访问数量上限
-                int second = requestLimit.second();// 时间窗口
-                Integer reqTime = (Integer) Optional.ofNullable(redisTemplate.opsForValue().get(cacheKey)).orElse(0);
-                if (reqTime == 0) {
-                    redisTemplate.opsForValue().set(cacheKey, 1, second, TimeUnit.SECONDS);
-                    return true;
-                } else if (reqTime < limit) {
-                    redisTemplate.opsForValue().increment(cacheKey, 1);
-                    return true;
-                }
-                // 超过限流数量上限
-                // 直接抛出全局异常，让异常捕获器处理
-                LOGGER.error("[RequestLimitInterceptor] userId is {}, req too much", userId);
-                throw new QiyuErrorException(-10001, requestLimit.msg());
-            }
-        }
-        return true;
+        return true;//测试时代码，直接返回true，部署时请删掉此行代码，并打开下面代码
+        // if (handler instanceof HandlerMethod) {
+        //     HandlerMethod handlerMethod = (HandlerMethod) handler;
+        //     // 查看有无 @RequestLimit 注解标识该方法
+        //     boolean hasLimit = handlerMethod.getMethod().isAnnotationPresent(RequestLimit.class);
+        //     if (hasLimit) {
+        //         RequestLimit requestLimit = handlerMethod.getMethod().getAnnotation(RequestLimit.class);
+        //         Long userId = QiyuRequestContext.getUserId();
+        //         // 没有userId标识是网关通过的白名单请求，放行
+        //         if (userId == null) {
+        //             return true;
+        //         }
+        //         //(userId + url + requestValue) base64 -> String(key)
+        //         String cacheKey = applicationName + ":" + userId + ":" + request.getRequestURI();
+        //         int limit = requestLimit.limit();// 限制访问数量上限
+        //         int second = requestLimit.second();// 时间窗口
+        //         Integer reqTime = (Integer) Optional.ofNullable(redisTemplate.opsForValue().get(cacheKey)).orElse(0);
+        //         if (reqTime == 0) {
+        //             redisTemplate.opsForValue().set(cacheKey, 1, second, TimeUnit.SECONDS);
+        //             return true;
+        //         } else if (reqTime < limit) {
+        //             redisTemplate.opsForValue().increment(cacheKey, 1);
+        //             return true;
+        //         }
+        //         // 超过限流数量上限
+        //         // 直接抛出全局异常，让异常捕获器处理
+        //         LOGGER.error("[RequestLimitInterceptor] userId is {}, req too much", userId);
+        //         throw new QiyuErrorException(-10001, requestLimit.msg());
+        //     }
+        // }
+        // return true;
     }
 }
  

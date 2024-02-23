@@ -5011,7 +5011,7 @@ public class WsImServerCoreHandler extends SimpleChannelInboundHandler {
     public void channelInactive(ChannelHandlerContext ctx) {
         Long userId = ImContextUtils.getUserId(ctx);
         int appId = ImContextUtils.getAppId(ctx);
-        logoutMsgHandler.handlerLogout(userId, appId);
+        logoutMsgHandler.logoutHandler(ctx, userId, appId);
     }
 
     private void wsMsgHandler(ChannelHandlerContext ctx, WebSocketFrame msg) {
@@ -5487,7 +5487,7 @@ private void sendLoginMQ(Long userId, Integer appId, Integer roomId) {
 4 LogoutMsgHandler进行发送mq消息，异步取消userId与roomId的绑定：
 
 ```java
-handler()方法最后一行加上 sendLogoutMQ(ctx, userId, appId);
+logoutHandler()方法removeUserId前加上 sendLogoutMQ(ctx, userId, appId);
 logoutHandler()方法加上 ImContextUtils.removeRoomId(ctx);
 
 /**
@@ -5709,7 +5709,7 @@ public class SingleMessageHandlerImpl implements MessageHandler {
     public void onMsgReceive(ImMsgBody imMsgBody) {
         int bizCode = imMsgBody.getBizCode();
         // 直播间的聊天消息
-        if (bizCode == ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
+        if (bizCode == ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode()) {
             //一个人发送，n个人接收
             //根据roomId去调用rpc方法查询直播间在线userId
             MessageDTO messageDTO = JSON.parseObject(imMsgBody.getData(), MessageDTO.class);
@@ -5720,19 +5720,16 @@ public class SingleMessageHandlerImpl implements MessageHandler {
             //自己不用发
             List<Long> userIdList = livingRoomRpc.queryUserIdsByRoomId(reqDTO).stream().filter(x -> !x.equals(imMsgBody.getUserId())).collect(Collectors.toList());
             if (CollectionUtils.isEmpty(userIdList)) {
+                System.out.println("[SingleMessageHandlerImpl] 要转发的userIdList为空");
                 return;
             }
             
             List<ImMsgBody> respMsgBodies = new ArrayList<>();
-            ImMsgBody respMsgBody = new ImMsgBody();
-            respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
-            respMsgBody.setBizCode(ImMsgBizCodeEum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("senderId", messageDTO.getUserId());
-            jsonObject.put("content", messageDTO.getContent());
-            respMsgBody.setData(JSON.toJSONString(messageDTO));
-            
             userIdList.forEach(userId -> {
+                ImMsgBody respMsgBody = new ImMsgBody();
+                respMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+                respMsgBody.setBizCode(ImMsgBizCodeEnum.LIVING_ROOM_IM_CHAT_MSG_BIZ.getCode());
+                respMsgBody.setData(JSON.toJSONString(messageDTO));
                 //设置发送目标对象的id
                 respMsgBody.setUserId(userId);
                 respMsgBodies.add(respMsgBody);
@@ -5926,22 +5923,25 @@ LivingRoomServiceImpl：
 @Override
 public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
     LivingRoomRespDTO respDTO = livingRoomRpc.queryByRoomId(roomId);
-    UserDTO userDTO = userRpc.getUserById(userId);
+    // UserDTO userDTO = userRpc.getUserById(userId);
+    Map<Long, UserDTO> userDTOMap = userRpc.batchQueryUserInfo(Arrays.asList(respDTO.getAnchorId(), userId).stream().distinct().collect(Collectors.toList()));
+    UserDTO anchor = userDTOMap.get(respDTO.getAnchorId());
+    UserDTO watcher = userDTOMap.get(userId);
     LivingRoomInitVO respVO = new LivingRoomInitVO();
-    respVO.setNickName(userDTO.getNickName());
+    respVO.setAnchorNickName(anchor.getNickName());
+    respVO.setWatcherNickName(watcher.getNickName());
     respVO.setUserId(userId);
-    respVO.setAvatar(StringUtils.isEmpty(userDTO.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6g6f.png" : userDTO.getAvatar());
+    respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : anchor.getAvatar());
+    respVO.setWatcherAvatar(watcher.getAvatar());
     if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
         //直播间不存在，设置roomId为-1
         respVO.setRoomId(-1);
     }else {
         respVO.setRoomId(respDTO.getId());
-        respVO.setRoomName(respDTO.getRoomName());
         respVO.setAnchorId(respDTO.getAnchorId());
         respVO.setAnchor(respDTO.getAnchorId().equals(userId));
-        respVO.setAnchorImg(respDTO.getCovertImg());
-        respVO.setDefaultBgImg(respDTO.getCovertImg());
     }
+    respVO.setDefaultBgImg("https://picst.sunbangyan.cn/2023/08/29/waxzj0.png");
     return respVO;
 }
 ```

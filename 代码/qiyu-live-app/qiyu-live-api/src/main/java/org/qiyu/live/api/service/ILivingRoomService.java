@@ -2,7 +2,9 @@ package org.qiyu.live.api.service;
 
 import org.qiyu.live.api.vo.LivingRoomInitVO;
 import org.qiyu.live.api.vo.req.LivingRoomReqVO;
+import org.qiyu.live.api.vo.req.OnlinePKReqVO;
 import org.qiyu.live.api.vo.resp.LivingRoomPageRespVO;
+import org.qiyu.live.common.interfaces.vo.WebResponseVO;
 
 public interface ILivingRoomService {
     
@@ -25,4 +27,9 @@ public interface ILivingRoomService {
      * 查询直播间列表（分页）
      */
     LivingRoomPageRespVO list(LivingRoomReqVO livingRoomReqVO);
+
+    /**
+     * 当PK直播间连上线准备PK时，调用该请求
+     */
+    boolean onlinePK(OnlinePKReqVO onlinePKReqVO);
 }

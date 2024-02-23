@@ -74,19 +74,16 @@ public interface ILivingRoomService {
     LivingPkRespDTO onlinePk(LivingRoomReqDTO livingRoomReqDTO);
 
     /**
+     * 用户在pk直播间下线
+     */
+    boolean offlinePk(LivingRoomReqDTO livingRoomReqDTO);
+
+    /**
      * 根据roomId查询当前pk人是谁
      *
      * @param roomId
      * @return
      */
     Long queryOnlinePkUserId(Integer roomId);
-
-    /**
-     * 用户在pk直播间下线
-     *
-     * @param livingRoomReqDTO
-     * @return
-     */
-    boolean offlinePk(LivingRoomReqDTO livingRoomReqDTO);
     
 }

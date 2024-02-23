@@ -47,7 +47,7 @@ public class WsImServerCoreHandler extends SimpleChannelInboundHandler {
     public void channelInactive(ChannelHandlerContext ctx) {
         Long userId = ImContextUtils.getUserId(ctx);
         int appId = ImContextUtils.getAppId(ctx);
-        logoutMsgHandler.handlerLogout(userId, appId);
+        logoutMsgHandler.logoutHandler(ctx, userId, appId);
     }
 
     private void wsMsgHandler(ChannelHandlerContext ctx, WebSocketFrame msg) {
