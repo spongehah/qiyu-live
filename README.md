@@ -2,6 +2,8 @@
 
 [TOC]
 
+> 前端源码地址：https://github.com/spongehah/qiyu-live-web
+
 # 1 系统架构
 
 使用异步消息传递的架构
