@@ -70,7 +70,7 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         respVO.setWatcherNickName(watcher.getNickName());
         respVO.setUserId(userId);
         respVO.setPkObjId(livingRoomRpc.queryOnlinePkUserId(roomId));
-        respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : anchor.getAvatar());
+        respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "../svga/img/爱心.png" : anchor.getAvatar());
         respVO.setWatcherAvatar(watcher.getAvatar());
         if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
             //直播间不存在，设置roomId为-1

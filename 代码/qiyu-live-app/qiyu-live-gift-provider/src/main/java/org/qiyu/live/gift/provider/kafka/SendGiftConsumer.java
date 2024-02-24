@@ -50,14 +50,15 @@ public class SendGiftConsumer {
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private GiftProviderCacheKeyBuilder cacheKeyBuilder;
-    private static final long PK_MIN_NUM = 0;
-    private static final long PK_MAX_NUM = 1000;
-    public static final DefaultRedisScript<Long> GET_PKNUM_AND_SEQID_SCRIPT;
+    private static final Long PK_INIT_NUM = 50L;
+    private static final Long PK_MAX_NUM = 100L;
+    private static final Long PK_MIN_NUM = 0L;
+    private static final DefaultRedisScript<Long> redisScript;
 
     static {
-        GET_PKNUM_AND_SEQID_SCRIPT = new DefaultRedisScript<>();
-        GET_PKNUM_AND_SEQID_SCRIPT.setLocation(new ClassPathResource("getPkNumAndSeqId.lua"));
-        GET_PKNUM_AND_SEQID_SCRIPT.setResultType(Long.class);
+        redisScript = new DefaultRedisScript<>();
+        redisScript.setResultType(Long.class);
+        redisScript.setLocation(new ClassPathResource("getPkNumAndSeqId.lua"));
     }
 
 
@@ -102,50 +103,7 @@ public class SendGiftConsumer {
                     LOGGER.info("[sendGiftConsumer] send success, msg is {}", record);
                 } else if (sendGiftType.equals(SendGiftTypeEnum.PK_SEND_GIFT.getCode())) {
                     System.out.println("4444444444444444444444");
-                    // PK送礼，要求全体可见
-                    // 1 礼物特效url全直播间可见
-                    jsonObject.put("url", sendGiftMq.getUrl());
-                    // 2 TODO PK进度条全直播间可见
-                    String pkNumKey = cacheKeyBuilder.buildLivingPkKey(roomId);
-                    String incrKey = cacheKeyBuilder.buildLivingPkSendSeq(roomId);
-                    // 获取 pkUserId 和 pkObjId
-                    Long pkObjId = livingRoomRpc.queryOnlinePkUserId(roomId);
-                    LivingRoomRespDTO livingRoomRespDTO = livingRoomRpc.queryByRoomId(roomId);
-                    if (pkObjId == null || livingRoomRespDTO == null || livingRoomRespDTO.getAnchorId() == null) {
-                        LOGGER.error("[sendGiftConsumer] 两个用户已经有不在线的，roomId is {}", roomId);
-                        continue;
-                    }
-                    Long pkUserId = livingRoomRespDTO.getAnchorId();
-                    Long resultNum = null;
-                    Long pkNum = 0L;
-                    // 获取该条消息的序列号，避免消息乱序
-                    Long sendGiftSeqNum = redisTemplate.opsForValue().increment(incrKey);
-                    if (sendGiftMq.getReceiverId().equals(pkUserId)) {
-                        // 收礼人是房主userId，则进度条增加
-                        resultNum = redisTemplate.opsForValue().increment(pkNumKey, sendGiftMq.getPrice());
-                        if (PK_MAX_NUM <= resultNum) {
-                            jsonObject.put("winnerId", pkUserId);
-                            // 返回给前端的pkNum最大为MAX_NUM
-                            pkNum = PK_MAX_NUM;
-                        } else {
-                            pkNum = resultNum;
-                        }
-                    } else if (sendGiftMq.getReceiverId().equals(pkObjId)) {
-                        // 收礼人是来挑战的，则进图条减少
-                        resultNum = redisTemplate.opsForValue().decrement(pkNumKey, sendGiftMq.getPrice());
-                        if (PK_MIN_NUM >= resultNum) {
-                            jsonObject.put("winnerId", pkObjId);
-                            // 返回给前端的pkNum最小为MIN_NUM
-                            pkNum = PK_MIN_NUM;
-                        } else {
-                            pkNum = resultNum;
-                        }
-                    }
-                    jsonObject.put("sendGiftSeqNum", sendGiftSeqNum);
-                    jsonObject.put("pkNum", pkNum);
-                    // 3 搜索要发送的用户
-                    // 利用封装方法发送批量消息，bizCode为PK_SEND_SUCCESS
-                    this.batchSendImMsg(userIdList, ImMsgBizCodeEnum.LIVING_ROOM_PK_SEND_GIFT_SUCCESS.getCode(), jsonObject);
+                    pkImMsgSend(sendGiftMq, jsonObject, roomId, userIdList);
                     LOGGER.info("[sendGiftConsumer] send pk msg success, msg is {}", record);
                 }
             } else {
@@ -157,6 +115,64 @@ public class SendGiftConsumer {
                 LOGGER.info("[sendGiftConsumer] send fail, msg is {}", tradeRespDTO.getMsg());
             }
         }
+    }
+
+    /**
+     * PK直播间送礼扣费成功后的流程：
+     * 1 设置礼物特效url
+     * 2 设置PK进度条的值
+     * 3 批量推送给直播间全体用户
+     * @param sendGiftMq 发送消息请求req
+     * @param jsonObject 返回的ImMsgBody的data部分
+     * @param roomId     直播间id
+     * @param userIdList 直播间在线用户列表
+     */
+    private void pkImMsgSend(SendGiftMq sendGiftMq, JSONObject jsonObject, Integer roomId, List<Long> userIdList) {
+        // PK送礼，要求全体可见
+        // 1 TODO PK进度条全直播间可见
+
+        String isOverCacheKey = cacheKeyBuilder.buildLivingPkIsOver(roomId);
+        // 1.1 判断直播PK是否已经结束
+        Boolean isOver = redisTemplate.hasKey(isOverCacheKey);
+        if (Boolean.TRUE.equals(isOver)) {
+            return;
+        }
+        // 1.2 获取 pkUserId 和 pkObjId
+        Long pkObjId = livingRoomRpc.queryOnlinePkUserId(roomId);
+        LivingRoomRespDTO livingRoomRespDTO = livingRoomRpc.queryByRoomId(roomId);
+        if (pkObjId == null || livingRoomRespDTO == null || livingRoomRespDTO.getAnchorId() == null) {
+            LOGGER.error("[sendGiftConsumer] 两个用户已经有不在线的，roomId is {}", roomId);
+            return;
+        }
+        Long pkUserId = livingRoomRespDTO.getAnchorId();
+        // 1.3 获取当前进度条值 和 送礼序列号
+        String pkNumKey = cacheKeyBuilder.buildLivingPkKey(roomId);
+        Long pkNum = 0L;
+        // 获取该条消息的序列号，避免消息乱序
+        Long sendGiftSeqNum = System.currentTimeMillis();
+        if (sendGiftMq.getReceiverId().equals(pkUserId)) {
+            Integer moveStep = sendGiftMq.getPrice() / 10;
+            // 收礼人是房主userId，则进度条增加
+            pkNum = redisTemplate.execute(redisScript, Collections.singletonList(pkNumKey), PK_INIT_NUM, PK_MAX_NUM, PK_MIN_NUM, moveStep);
+            if (PK_MAX_NUM <= pkNum) {
+                jsonObject.put("winnerId", pkUserId);
+            }
+        } else if (sendGiftMq.getReceiverId().equals(pkObjId)) {
+            Integer moveStep = sendGiftMq.getPrice() / 10 * -1;
+            // 收礼人是来挑战的，则进图条减少
+            pkNum = redisTemplate.execute(redisScript, Collections.singletonList(pkNumKey), PK_INIT_NUM, PK_MAX_NUM, PK_MIN_NUM, moveStep);
+            if (PK_MIN_NUM >= pkNum) {
+                jsonObject.put("winnerId", pkObjId);
+            }
+        }
+        jsonObject.put("receiverId", sendGiftMq.getReceiverId());
+        jsonObject.put("sendGiftSeqNum", sendGiftSeqNum);
+        jsonObject.put("pkNum", pkNum);
+        // 2 礼物特效url全直播间可见
+        jsonObject.put("url", sendGiftMq.getUrl());
+        // 3 搜索要发送的用户
+        // 利用封装方法发送批量消息，bizCode为PK_SEND_SUCCESS
+        this.batchSendImMsg(userIdList, ImMsgBizCodeEnum.LIVING_ROOM_PK_SEND_GIFT_SUCCESS.getCode(), jsonObject);
     }
 
     /**
@@ -176,7 +192,7 @@ public class SendGiftConsumer {
      */
     private void batchSendImMsg(List<Long> userIdList, Integer bizCode, JSONObject jsonObject) {
         List<ImMsgBody> imMsgBodies = new ArrayList<>();
-        
+
         userIdList.forEach(userId -> {
             ImMsgBody imMsgBody = new ImMsgBody();
             imMsgBody.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());

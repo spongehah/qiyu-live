@@ -219,6 +219,9 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         }
         System.out.println("删除成功");
         String cacheKey = cacheKeyBuilder.buildLivingOnlinePk(roomId);
+        //删除PK进度条值缓存
+        redisTemplate.delete("qiyu-live-gift-provider:living_pk_key:" + roomId);
+        //删除PK直播间pkObjId缓存
         return Boolean.TRUE.equals(redisTemplate.delete(cacheKey));
     }
 

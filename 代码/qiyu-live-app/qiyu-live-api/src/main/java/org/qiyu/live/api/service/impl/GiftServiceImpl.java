@@ -1,6 +1,8 @@
 package org.qiyu.live.api.service.impl;
 
 import com.alibaba.fastjson.JSON;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.annotation.Resource;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.api.error.ApiErrorEnum;
@@ -35,6 +37,8 @@ public class GiftServiceImpl implements IGiftService {
     private QiyuCurrencyAccountRpc qiyuCurrencyAccountRpc;
     @Resource
     private KafkaTemplate<String, String> kafkaTemplate;
+    @Resource
+    private Cache<Integer, GiftConfigDTO> giftConfigDTOCache;
 
     @Override
     public List<GiftConfigVO> listGift() {
@@ -45,8 +49,10 @@ public class GiftServiceImpl implements IGiftService {
     @Override
     public boolean send(GiftReqVO giftReqVO) {
         int giftId = giftReqVO.getGiftId();
-        GiftConfigDTO giftConfigDTO = giftConfigRpc.getByGiftId(giftId);
+        // 查询本地缓存
+        GiftConfigDTO giftConfigDTO = giftConfigDTOCache.get(giftId, id -> giftConfigRpc.getByGiftId(giftId));
         ErrorAssert.isNotNull(giftConfigDTO, ApiErrorEnum.GIFT_CONFIG_ERROR);
+        ErrorAssert.isTure(!giftReqVO.getReceiverId().equals(giftReqVO.getSenderUserId()), ApiErrorEnum.NOT_SEND_TO_YOURSELF);
         // 进行异步消费
         SendGiftMq sendGiftMq = new SendGiftMq();
         sendGiftMq.setUserId(QiyuRequestContext.getUserId());

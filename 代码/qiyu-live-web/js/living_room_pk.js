@@ -158,6 +158,8 @@ new Vue({
             httpPost(onlinePkUrl, data)
                 .then(resp => {
                     if (isSuccess(resp)) {
+                        that.winnerId = null;
+                        that.pkEnd = false;
                         that.$message.success('连线成功');
                     } else {
                         that.$message.success(resp.msg);

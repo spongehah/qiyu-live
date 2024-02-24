@@ -81,8 +81,9 @@ public class PayOrderServiceImpl implements IPayOrderService {
         // bizCode 与 order 校验
         PayOrderPO payOrderPO = this.queryByOrderId(payOrderDTO.getOrderId());
         if (payOrderPO == null) {
-            LOGGER.error("[PayOrderServiceImpl] error payOrderPO, payOrderDTO is {}", payOrderDTO);
-            return false;
+            LOGGER.error("[PayOrderServiceImpl] payOrderPO is null, create a payOrderPO, userId is {}", payOrderDTO.getUserId());
+            qiyuCurrencyAccountService.insertOne(payOrderDTO.getUserId());
+            payOrderPO = this.queryByOrderId(payOrderDTO.getOrderId());
         }
         PayTopicPO payTopicPO = payTopicService.getByCode(payOrderDTO.getBizCode());
         if (payTopicPO == null || StringUtils.isEmpty(payTopicPO.getTopic())) {
