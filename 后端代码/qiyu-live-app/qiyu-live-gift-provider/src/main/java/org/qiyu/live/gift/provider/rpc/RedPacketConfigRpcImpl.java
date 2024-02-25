@@ -32,7 +32,12 @@ public class RedPacketConfigRpcImpl implements IRedPacketConfigRpc {
     }
 
     @Override
-    public RedPacketReceiveDTO receiveRedPacket(String code) {
-        return redPacketConfigService.receiveRedPacket(code);
+    public RedPacketReceiveDTO receiveRedPacket(RedPacketConfigReqDTO redPacketConfigReqDTO) {
+        return redPacketConfigService.receiveRedPacket(redPacketConfigReqDTO);
+    }
+
+    @Override
+    public Boolean startRedPacket(RedPacketConfigReqDTO reqDTO) {
+        return redPacketConfigService.startRedPacket(reqDTO);
     }
 }

@@ -64,4 +64,23 @@ public class LivingRoomController {
         ErrorAssert.isNotNull(onlinePKReqVO.getRoomId(), BizBaseErrorEnum.PARAM_ERROR);
         return WebResponseVO.success(livingRoomService.onlinePK(onlinePKReqVO));
     }
+
+    @RequestLimit(limit = 1, second = 10, msg = "正在初始化红包数据，请稍等")
+    @PostMapping("/prepareRedPacket")
+    public WebResponseVO prepareRedPacket(LivingRoomReqVO livingRoomReqVO) {
+        return WebResponseVO.success(livingRoomService.prepareRedPacket(QiyuRequestContext.getUserId(), livingRoomReqVO.getRoomId()));
+    }
+
+    @RequestLimit(limit = 1, second = 10, msg = "正在广播直播间用户，请稍等")
+    @PostMapping("/startRedPacket")
+    public WebResponseVO startRedPacket(LivingRoomReqVO livingRoomReqVO) {
+        return WebResponseVO.success(livingRoomService.startRedPacket(QiyuRequestContext.getUserId(), livingRoomReqVO.getRedPacketConfigCode()));
+    }
+
+    @RequestLimit(limit = 1, second = 7, msg = "")
+    @PostMapping("/getRedPacket")
+    public WebResponseVO getRedPacket(LivingRoomReqVO livingRoomReqVO) {
+        return WebResponseVO.success(livingRoomService.getRedPacket(QiyuRequestContext.getUserId(), livingRoomReqVO.getRedPacketConfigCode()));
+    }
+    
 }

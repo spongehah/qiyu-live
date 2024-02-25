@@ -13,5 +13,6 @@ public class RedPacketConfigRespDTO implements Serializable {
     private Long anchorId;
     private Integer totalPrice;
     private Integer totalCount;
+    private String configCode;
     private String remark;
 }

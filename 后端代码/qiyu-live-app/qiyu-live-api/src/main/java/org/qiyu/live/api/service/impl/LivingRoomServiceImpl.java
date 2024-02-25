@@ -10,9 +10,14 @@ import org.qiyu.live.api.vo.req.LivingRoomReqVO;
 import org.qiyu.live.api.vo.req.OnlinePKReqVO;
 import org.qiyu.live.api.vo.resp.LivingRoomPageRespVO;
 import org.qiyu.live.api.vo.resp.LivingRoomRespVO;
+import org.qiyu.live.api.vo.resp.RedPacketReceiveVO;
 import org.qiyu.live.common.interfaces.dto.PageWrapper;
 import org.qiyu.live.common.interfaces.utils.ConvertBeanUtils;
 import org.qiyu.live.common.interfaces.vo.WebResponseVO;
+import org.qiyu.live.gift.dto.RedPacketConfigReqDTO;
+import org.qiyu.live.gift.dto.RedPacketConfigRespDTO;
+import org.qiyu.live.gift.dto.RedPacketReceiveDTO;
+import org.qiyu.live.gift.interfaces.IRedPacketConfigRpc;
 import org.qiyu.live.im.constants.AppIdEnum;
 import org.qiyu.live.living.interfaces.dto.LivingPkRespDTO;
 import org.qiyu.live.living.interfaces.dto.LivingRoomReqDTO;
@@ -21,6 +26,7 @@ import org.qiyu.live.living.interfaces.rpc.ILivingRoomRpc;
 import org.qiyu.live.user.dto.UserDTO;
 import org.qiyu.live.user.interfaces.IUserRpc;
 import org.qiyu.live.web.starter.context.QiyuRequestContext;
+import org.qiyu.live.web.starter.error.BizBaseErrorEnum;
 import org.qiyu.live.web.starter.error.ErrorAssert;
 import org.qiyu.live.web.starter.error.QiyuErrorException;
 import org.springframework.stereotype.Service;
@@ -36,6 +42,8 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
     private ILivingRoomRpc livingRoomRpc;
     @DubboReference
     private IUserRpc userRpc;
+    @DubboReference
+    private IRedPacketConfigRpc redPacketConfigRpc;
 
     @Override
     public Integer startingLiving(Integer type) {
@@ -72,15 +80,22 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         respVO.setPkObjId(livingRoomRpc.queryOnlinePkUserId(roomId));
         respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "../svga/img/爱心.png" : anchor.getAvatar());
         respVO.setWatcherAvatar(watcher.getAvatar());
-        if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
-            //直播间不存在，设置roomId为-1
-            respVO.setRoomId(-1);
-        }else {
-            respVO.setRoomId(respDTO.getId());
-            respVO.setAnchorId(respDTO.getAnchorId());
-            respVO.setAnchor(respDTO.getAnchorId().equals(userId));
-        }
         respVO.setDefaultBgImg("https://picst.sunbangyan.cn/2023/08/29/waxzj0.png");
+        if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
+            // 直播间不存在，设置roomId为-1
+            respVO.setRoomId(-1);
+            return respVO;
+        }
+        respVO.setRoomId(respDTO.getId());
+        respVO.setAnchorId(respDTO.getAnchorId());
+        respVO.setAnchor(respDTO.getAnchorId().equals(userId));
+        // 如果是主播，查看有无红包雨权限
+        if (respVO.isAnchor()) {
+            RedPacketConfigRespDTO redPacketConfigRespDTO = redPacketConfigRpc.queryByAnchorId(userId);
+            if (redPacketConfigRespDTO != null) {
+                respVO.setRedPacketConfigCode(redPacketConfigRespDTO.getConfigCode());
+            }
+        }
         return respVO;
     }
 
@@ -102,5 +117,40 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         LivingPkRespDTO tryOnlineStatus = livingRoomRpc.onlinePK(reqDTO);
         ErrorAssert.isTure(tryOnlineStatus.isOnlineStatus(), new QiyuErrorException(-1, tryOnlineStatus.getMsg()));
         return true;
+    }
+
+    @Override
+    public Boolean prepareRedPacket(Long userId, Integer roomId) {
+        LivingRoomRespDTO livingRoomRespDTO = livingRoomRpc.queryByRoomId(roomId);
+        ErrorAssert.isNotNull(livingRoomRespDTO, BizBaseErrorEnum.PARAM_ERROR);
+        ErrorAssert.isTure(userId.equals(livingRoomRespDTO.getAnchorId()), BizBaseErrorEnum.PARAM_ERROR);
+        return redPacketConfigRpc.prepareRedPacket(userId);
+    }
+
+    @Override
+    public Boolean startRedPacket(Long userId, String code) {
+        RedPacketConfigReqDTO reqDTO = new RedPacketConfigReqDTO();
+        reqDTO.setUserId(userId);
+        reqDTO.setRedPacketConfigCode(code);
+        LivingRoomRespDTO livingRoomRespDTO = livingRoomRpc.queryByAnchorId(userId);
+        ErrorAssert.isNotNull(livingRoomRespDTO, BizBaseErrorEnum.PARAM_ERROR);
+        reqDTO.setRoomId(livingRoomRespDTO.getId());
+        return redPacketConfigRpc.startRedPacket(reqDTO);
+    }
+
+    @Override
+    public RedPacketReceiveVO getRedPacket(Long userId, String code) {
+        RedPacketConfigReqDTO reqDTO = new RedPacketConfigReqDTO();
+        reqDTO.setUserId(userId);
+        reqDTO.setRedPacketConfigCode(code);
+        RedPacketReceiveDTO receiveDTO = redPacketConfigRpc.receiveRedPacket(reqDTO);
+        RedPacketReceiveVO respVO = new RedPacketReceiveVO();
+        if (receiveDTO == null) {
+            respVO.setMsg("红包已派发完毕");
+        } else {
+            respVO.setPrice(receiveDTO.getPrice());
+            respVO.setMsg(receiveDTO.getNotifyMsg());
+        }
+        return respVO;
     }
 }

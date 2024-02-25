@@ -111,6 +111,15 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
     }
 
     @Override
+    public LivingRoomRespDTO queryByAnchorId(Long anchorId) {
+        LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(LivingRoomPO::getAnchorId, anchorId);
+        queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
+        queryWrapper.last("limit 1");
+        return ConvertBeanUtils.convert(livingRoomMapper.selectOne(queryWrapper), LivingRoomRespDTO.class);
+    }
+
+    @Override
     public PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO) {
         // 因为直播平台同时在线直播人数不算太多，属于读多写少场景，所以将其缓存进Redis进行提速
         String cacheKey = cacheKeyBuilder.buildLivingRoomList(livingRoomReqDTO.getType());

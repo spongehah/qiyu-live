@@ -13,5 +13,5 @@ public class RedPacketReceiveDTO implements Serializable {
     private static final long serialVersionUID = -5916608127876611063L;
     
     private Integer price;
-    
+    private String notifyMsg;
 }

@@ -16,6 +16,12 @@ public interface ILivingRoomRpc {
     LivingRoomRespDTO queryByRoomId(Integer roomId);
 
     /**
+     * 根据主播id查询直播间
+     */
+    LivingRoomRespDTO queryByAnchorId(Long anchorId);
+    
+
+    /**
      * 开启直播间
      *
      * @param livingRoomReqDTO

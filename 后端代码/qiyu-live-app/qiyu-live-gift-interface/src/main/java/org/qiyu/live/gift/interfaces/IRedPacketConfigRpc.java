@@ -24,5 +24,11 @@ public interface IRedPacketConfigRpc {
     /**
      * 直播间用户领取红包
      */
-    RedPacketReceiveDTO receiveRedPacket(String code);
+    RedPacketReceiveDTO receiveRedPacket(RedPacketConfigReqDTO redPacketConfigReqDTO);
+
+    /**
+     * 开始红包雨
+     */
+    Boolean startRedPacket(RedPacketConfigReqDTO reqDTO);
+    
 }

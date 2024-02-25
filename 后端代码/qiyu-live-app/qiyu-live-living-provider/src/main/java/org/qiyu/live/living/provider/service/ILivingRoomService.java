@@ -36,6 +36,11 @@ public interface ILivingRoomService {
     LivingRoomRespDTO queryByRoomId(Integer roomId);
 
     /**
+     * 根据主播id查询直播间
+     */
+    LivingRoomRespDTO queryByAnchorId(Long anchorId);
+
+    /**
      * 直播间列表的分页查询
      *
      * @param livingRoomReqDTO
@@ -85,5 +90,4 @@ public interface ILivingRoomService {
      * @return
      */
     Long queryOnlinePkUserId(Integer roomId);
-    
 }
