@@ -3,18 +3,24 @@ package org.qiyu.live.gift.provider.dao.po;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
 @Data
-@TableName("t_sku_stock_info")
-public class SkuStockInfoPO {
+@AllArgsConstructor
+@NoArgsConstructor
+@TableName("t_sku_order_info")
+public class SkuOrderInfoPO {
     @TableId(type = IdType.AUTO)
-    private Integer id;
-    private Long skuId;
-    private Integer stockNum;
+    private Long id;
+    private String skuIdList;
+    private Long userId;
+    private Integer roomId;
     private Integer status;
+    private String extra;
     private Date createTime;
     private Date updateTime;
 }

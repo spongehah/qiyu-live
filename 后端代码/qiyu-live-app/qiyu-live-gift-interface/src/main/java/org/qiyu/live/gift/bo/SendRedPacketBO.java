@@ -1,6 +1,7 @@
-package org.qiyu.live.gift.dto;
+package org.qiyu.live.gift.bo;
 
 import lombok.Data;
+import org.qiyu.live.gift.dto.RedPacketConfigReqDTO;
 
 import java.io.Serial;
 import java.io.Serializable;

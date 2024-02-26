@@ -23,6 +23,21 @@ public class GiftProviderCacheKeyBuilder extends RedisKeyBuilder {
     private static String RED_PACKET_PREPARE_SUCCESS = "red_packet_prepare_success";
     private static String RED_PACKET_NOTIFY = "red_packet_notify";
     private static String SKU_DETAIL_INFO_MAP = "sku_detail_info_map";
+    private static String SHOP_CAR = "shop_car";
+    private static String SKU_STOCK = "sku_stock";
+    private static String STOCK_SYNC_LOCK = "stock_sync_lock";
+
+    public String buildStockSyncLock() {
+        return super.getPrefix() + STOCK_SYNC_LOCK;
+    }
+    
+    public String buildSkuStock(Long skuId) {
+        return super.getPrefix() + SKU_STOCK + super.getSplitItem() + skuId;
+    }
+    
+    public String buildUserShopCar(Long userId, Integer roomId) {
+        return super.getPrefix() + SHOP_CAR + super.getSplitItem() + userId + super.getSplitItem() + roomId;
+    }
     
     public String buildSkuDetailInfoMap(Long anchorId) {
         return super.getPrefix() + SKU_DETAIL_INFO_MAP + super.getSplitItem() + anchorId;
