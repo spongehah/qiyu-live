@@ -10,5 +10,5 @@ public class ShopCarRespVO {
 
     private Long userId;
     private Integer roomId;
-    private List<ShopCarItemRespDTO> skuInfoDTOList;
+    private List<ShopCarItemRespDTO> shopCarItemRespDTOS;
 }

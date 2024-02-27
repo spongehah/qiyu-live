@@ -62,4 +62,14 @@ public class ShopInfoController {
     public WebResponseVO prepareOrder(PrepareOrderVO prepareOrderVO) {
         return WebResponseVO.success(shopInfoService.prepareOrder(prepareOrderVO));
     }
+    
+    @PostMapping("/prepareStock")
+    public WebResponseVO prepareStock(Long anchorId) {
+        return WebResponseVO.success(shopInfoService.prepareStock(anchorId));
+    }
+    
+    @PostMapping("/payNow")
+    public WebResponseVO payNow(PrepareOrderVO prepareOrderVO) {
+        return WebResponseVO.success(shopInfoService.payNow(prepareOrderVO));
+    }
 }

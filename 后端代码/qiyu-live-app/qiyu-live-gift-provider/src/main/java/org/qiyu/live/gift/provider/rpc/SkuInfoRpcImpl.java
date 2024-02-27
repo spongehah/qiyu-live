@@ -8,7 +8,6 @@ import org.qiyu.live.common.interfaces.utils.ConvertBeanUtils;
 import org.qiyu.live.gift.dto.SkuDetailInfoDTO;
 import org.qiyu.live.gift.dto.SkuInfoDTO;
 import org.qiyu.live.gift.interfaces.ISkuInfoRpc;
-import org.qiyu.live.gift.provider.dao.po.SkuInfoPO;
 import org.qiyu.live.gift.provider.service.IAnchorShopInfoService;
 import org.qiyu.live.gift.provider.service.ISkuInfoService;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -53,7 +52,7 @@ public class SkuInfoRpcImpl implements ISkuInfoRpc {
             return Collections.emptyList();
         }
         // 使用Redis进行缓存
-        Map<Long, SkuInfoDTO> skuInfoMap = skuInfoDTOS.stream().collect(Collectors.toMap(SkuInfoDTO::getSkuId, x -> x));
+        Map<String, SkuInfoDTO> skuInfoMap = skuInfoDTOS.stream().collect(Collectors.toMap(x -> String.valueOf(x.getSkuId()), x -> x));
         redisTemplate.opsForHash().putAll(cacheKey, skuInfoMap);
         redisTemplate.expire(cacheKey, 30L, TimeUnit.MINUTES);
         return skuInfoDTOS;
@@ -62,13 +61,13 @@ public class SkuInfoRpcImpl implements ISkuInfoRpc {
     @Override
     public SkuDetailInfoDTO queryBySkuId(Long skuId, Long anchorId) {
         String cacheKey = cacheKeyBuilder.buildSkuDetailInfoMap(anchorId);
-        SkuInfoDTO skuInfoDTO = (SkuInfoDTO) redisTemplate.opsForHash().get(cacheKey, skuId);
+        SkuInfoDTO skuInfoDTO = (SkuInfoDTO) redisTemplate.opsForHash().get(cacheKey, String.valueOf(skuId));
         if (skuInfoDTO != null) {
             return ConvertBeanUtils.convert(skuInfoDTO, SkuDetailInfoDTO.class);
         }
         skuInfoDTO = ConvertBeanUtils.convert(skuInfoService.queryBySkuId(skuId), SkuInfoDTO.class);
         if (skuInfoDTO != null) {
-            redisTemplate.opsForHash().put(cacheKey, skuId, skuInfoDTO);
+            redisTemplate.opsForHash().put(cacheKey, String.valueOf(skuId), skuInfoDTO);
         }
         return ConvertBeanUtils.convert(skuInfoDTO, SkuDetailInfoDTO.class);
     }

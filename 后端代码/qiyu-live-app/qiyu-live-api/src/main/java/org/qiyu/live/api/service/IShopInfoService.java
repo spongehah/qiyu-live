@@ -6,6 +6,7 @@ import org.qiyu.live.api.vo.req.SkuInfoReqVO;
 import org.qiyu.live.api.vo.resp.ShopCarRespVO;
 import org.qiyu.live.api.vo.resp.SkuDetailInfoVO;
 import org.qiyu.live.api.vo.resp.SkuInfoVO;
+import org.qiyu.live.gift.dto.SkuPrepareOrderInfoDTO;
 
 import java.util.List;
 
@@ -48,5 +49,15 @@ public interface IShopInfoService {
     /**
      * 进行预下单操作
      */
-    boolean prepareOrder(PrepareOrderVO prepareOrderVO);
+    SkuPrepareOrderInfoDTO prepareOrder(PrepareOrderVO prepareOrderVO);
+
+    /**
+     * 准备库存到Redis
+     */
+    boolean prepareStock(Long anchorId);
+
+    /**
+     * 用户进行订单支付
+     */
+    boolean payNow(PrepareOrderVO prepareOrderVO);
 }

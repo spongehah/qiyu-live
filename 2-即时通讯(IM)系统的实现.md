@@ -5948,4 +5948,158 @@ public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
 
 > 然后前端发送的连接ws url格式：ws://127.0.0.1:8809/{token}/{userId}/{code}/{roomId}
 
+# 补充：直播视频推拉流的实现思路
+
+![image-20240227214833808](image/2-即时通讯(IM)系统的实现.assets/image-20240227214833808.png)
+
+
+
+- **常见的推拉流协议**
+
+  - 常见的推拉流方面协议有RTP、RTSP、RTMP、HLS、SRT、WebRTC等几种
+  - 这里使用RTMP
+
+- **安装数据采集转换点Nginx步骤**
+
+  - ```bash
+    yum update
+    yum install gcc
+    yum install pcre pcre-devel
+    yum install openssl openssl-devel
+    yum install wget unzip
+    ```
+
+  - 下载nginx和nginx-http-flv-module（也可以用git clone）。nginx-http-flv-module基于nginx-rtmp-module，所以不用再安装nginx-rtmp-module。
+
+    ```bash
+    get http://nginx.org/download/nginx-1.20.1.tar.gz # 可到http://nginx.org/download/查看stable版本
+    wget https://github.com/winshining/nginx-http-flv-module/archive/refs/heads/master.zip
+    tar -zxvf nginx-1.20.1.tar.gz
+    unzip master.zip
+    ```
+
+  - 添加模块，编译和安装nginx
+
+    ```bash
+    cd nginx-1.20.1
+    ./configure --with-http_ssl_module --with-http_secure_link_module --add-module=../nginx-http-flv-module-master
+    make
+    sudo make install
+    ```
+
+  - make install后，nginx默认会安装在/usr/local/nginx/目录下在/usr/local/nginx/conf/nginx.conf中，添加相关的配置。
+
+    ```properties
+    http {
+        include         mime.types;
+        default_type    application/octet-stream;
+    
+        sendfile        on;
+        keepalive_timeout   65;
+    
+        server {
+            listen 80;
+            server_name localhost;
+    
+            location / {
+                root    html;
+                index   index.html index.htm;
+            }
+    
+            location /flv {
+                flv_live on; #打开 HTTP 播放 FLV 直播流功能
+                chunked_transfer_encoding on; #支持 'Transfer-Encoding: chunked' 方式回复
+    
+                add_header 'Access-Control-Allow-Origin' '*'; #添加额外的 HTTP 头
+                add_header 'Access-Control-Allow-Credentials' 'true'; #添加额外的 HTTP 头
+            }
+        }
+    }
+    rtmp_auto_push on;
+    rtmp {
+        server {
+            listen 1935;
+            notify_method get;
+            access_log  /var/log/nginx/access.log;
+            chunk_size 4096;
+            application live {
+                # 开启直播模式
+                live on;
+                # 允许从任何源push流
+                allow publish all;
+                # 允许从任何地方来播放流
+                allow play all;
+                # 20秒内没有push，就断开链接。
+                drop_idle_publisher 20s;
+            }
+        }
+    }
+    
+    ```
+
+  - rtmp推流地址： rtmp://example.com[:port]/appname/streamname
+
+    http-flv拉流播放地址： 
+    http://example.com[:port]/dir?[port=xxx&]app=appname&stream=streamname
+
+    更多配置可以参考[nginx-http-flv-module README](https://link.juejin.cn?target=https%3A%2F%2Fgithub.com%2Fwinshining%2Fnginx-http-flv-module%2Fblob%2Fmaster%2FREADME.CN.md)。
+
+    检查配置，重启nginx。
+
+- **本地安装流采集器ffmpeg**
+
+  - 进入官网下载即可：
+
+    https://ffmpeg.org/download.html
+
+    下载完毕之后，我们就可以选择一部本地的视频进行推流测试了：
+
+  - ```bash
+    ./ffmpeg -re -i ./test-v.mp4  -vcodec copy -acodec copy -f flv rtmp://live.server.com/live/01
+    ```
+
+    这里我们推送的是完整的视频test-v.mp4
+
+    live需要和nginx上的application进行映射
+
+    01是指我们的流的名字
+
+- **拉流**
+
+  - 去B站官方下载flv.js文件
+
+  - ```html
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>测试b站的flv.js</title>
+    </head>
+    <body>
+        <video id="videoElement"
+        controls
+        autoplay
+        muted autoplay="true" width="800"></video>
+    </body>
+    <script src="../js/flv.js"></script>
+    <script>
+        if (flvjs.isSupported()) {
+            var videoElement = document.getElementById('videoElement');
+            var flvPlayer = flvjs.createPlayer({
+                type: 'flv',
+                url: 'http://106.55.106.248/flv?app=live&&stream=01'
+            });
+            flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.load();
+            flvPlayer.play();
+            console.log('started');
+        }
+    </script>
+    </html>
+    ```
+
+- **直播场景：**
+
+  - 主播一般需要安装特定的直播软件，专门的客户端工具，exe。C++语言去实现，例如：斗鱼直播，b站直播，腾讯课堂直播。
+
 # end

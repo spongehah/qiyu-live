@@ -8,6 +8,7 @@ import org.apache.dubbo.config.annotation.DubboReference;
 import org.idea.qiyu.live.framework.redis.starter.key.LivingProviderCacheKeyBuilder;
 import org.qiyu.live.common.interfaces.dto.PageWrapper;
 import org.qiyu.live.common.interfaces.enums.CommonStatusEnum;
+import org.qiyu.live.common.interfaces.topic.GiftProviderTopicNames;
 import org.qiyu.live.common.interfaces.utils.ConvertBeanUtils;
 import org.qiyu.live.im.constants.AppIdEnum;
 import org.qiyu.live.im.core.server.interfaces.dto.ImOfflineDTO;
@@ -26,6 +27,7 @@ import org.qiyu.live.living.provider.service.ILivingRoomService;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -48,6 +50,8 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private LivingProviderCacheKeyBuilder cacheKeyBuilder;
+    @Resource
+    private KafkaTemplate<String, String> kafkaTemplate;
     @DubboReference
     private ImRouterRpc routerRpc;
 
@@ -60,6 +64,8 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         String cacheKey = cacheKeyBuilder.buildLivingRoomObj(livingRoomPO.getId());
         // 防止之前有空值缓存，这里做移除操作
         redisTemplate.delete(cacheKey);
+        // 发送mq进行异步商品库存加载
+        kafkaTemplate.send(GiftProviderTopicNames.START_LIVING_ROOM, String.valueOf(livingRoomReqDTO.getAnchorId()));
         return livingRoomPO.getId();
     }
 

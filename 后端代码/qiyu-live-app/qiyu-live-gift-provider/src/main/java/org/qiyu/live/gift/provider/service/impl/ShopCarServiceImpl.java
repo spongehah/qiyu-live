@@ -12,6 +12,7 @@ import org.qiyu.live.gift.provider.service.IShopCarService;
 import org.qiyu.live.gift.provider.service.ISkuInfoService;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,14 +35,14 @@ public class ShopCarServiceImpl implements IShopCarService {
     @Override
     public Boolean addCar(ShopCarReqDTO shopCarReqDTO) {
         String cacheKey = cacheKeyBuilder.buildUserShopCar(shopCarReqDTO.getUserId(), shopCarReqDTO.getRoomId());
-        redisTemplate.opsForHash().put(cacheKey, shopCarReqDTO.getSkuId(), 1);
+        redisTemplate.opsForHash().put(cacheKey, String.valueOf(shopCarReqDTO.getSkuId()), 1);
         return true;
     }
 
     @Override
     public Boolean removeFromCar(ShopCarReqDTO shopCarReqDTO) {
         String cacheKey = cacheKeyBuilder.buildUserShopCar(shopCarReqDTO.getUserId(), shopCarReqDTO.getRoomId());
-        redisTemplate.opsForHash().delete(cacheKey, shopCarReqDTO.getSkuId());
+        redisTemplate.opsForHash().delete(cacheKey, String.valueOf(shopCarReqDTO.getSkuId()));
         return true;
     }
 
@@ -55,7 +56,7 @@ public class ShopCarServiceImpl implements IShopCarService {
     @Override
     public Boolean addCarItemNum(ShopCarReqDTO shopCarReqDTO) {
         String cacheKey = cacheKeyBuilder.buildUserShopCar(shopCarReqDTO.getUserId(), shopCarReqDTO.getRoomId());
-        redisTemplate.opsForHash().increment(cacheKey, shopCarReqDTO.getSkuId(), 1);
+        redisTemplate.opsForHash().increment(cacheKey, String.valueOf(shopCarReqDTO.getSkuId()), 1);
         return true;
     }
 
@@ -63,9 +64,12 @@ public class ShopCarServiceImpl implements IShopCarService {
     public ShopCarRespDTO getCarInfo(ShopCarReqDTO shopCarReqDTO) {
         String cacheKey = cacheKeyBuilder.buildUserShopCar(shopCarReqDTO.getUserId(), shopCarReqDTO.getRoomId());
         Map<Object, Object> entries = redisTemplate.opsForHash().entries(cacheKey);
+        if (CollectionUtils.isEmpty(entries)) {
+            return new ShopCarRespDTO();
+        }
         Map<Long, Integer> skuCountMap = new HashMap<>(entries.size());
         for (Map.Entry<Object, Object> entry : entries.entrySet()) {
-            skuCountMap.put((Long) entry.getKey(), (Integer) entry.getValue());
+            skuCountMap.put(Long.valueOf((String) entry.getKey()), (Integer) entry.getValue());
         }
         List<Long> skuIdList = new ArrayList<>(skuCountMap.keySet());
         List<SkuInfoPO> skuInfoPOS = skuInfoService.queryBySkuIds(skuIdList);

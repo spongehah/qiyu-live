@@ -40,4 +40,5 @@ public interface QiyuCurrencyAccountRpc {
      * 消费：如果余额充足才扣减，不足则不扣减
      */
     AccountTradeRespDTO consume(AccountTradeReqDTO accountTradeReqDTO);
+
 }

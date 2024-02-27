@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class PrepareOrderVO {
-    
+
     private Long userId;
     private Integer roomId;
 }

@@ -38,6 +38,7 @@ public class SkuOrderInfoServiceImpl implements ISkuOrderInfoService {
         // hutool工具包的StrUtil
         String skuIdListStr = StrUtil.join(",", skuOrderInfoReqDTO.getSkuIdList());
         SkuOrderInfoPO skuOrderInfoPO = ConvertBeanUtils.convert(skuOrderInfoReqDTO, SkuOrderInfoPO.class);
+        skuOrderInfoPO.setSkuIdList(skuIdListStr);
         skuOrderInfoMapper.insert(skuOrderInfoPO);
         return skuOrderInfoPO;
     }
@@ -45,8 +46,8 @@ public class SkuOrderInfoServiceImpl implements ISkuOrderInfoService {
     @Override
     public boolean updateOrderStatus(SkuOrderInfoReqDTO skuOrderInfoReqDTO) {
         SkuOrderInfoPO skuOrderInfoPO = new SkuOrderInfoPO();
-        skuOrderInfoPO.setStatus(skuOrderInfoPO.getStatus());
-        skuOrderInfoPO.setId(skuOrderInfoPO.getId());
+        skuOrderInfoPO.setStatus(skuOrderInfoReqDTO.getStatus());
+        skuOrderInfoPO.setId(skuOrderInfoReqDTO.getId());
         skuOrderInfoMapper.updateById(skuOrderInfoPO);
         return false;
     }
