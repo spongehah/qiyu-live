@@ -60,7 +60,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <arthus.zip.address>D:\浏览器下载\</arthus.zip.address>
+        <arthus.zip.address>~/Download/</arthus.zip.address>
     </properties>
 
     <dependencyManagement>

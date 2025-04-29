@@ -8,14 +8,14 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
       config:
         import-check:
           enabled: false
         file-extension: yaml
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
   config:
     import:
       - optional:nacos:${spring.application.name}.yml

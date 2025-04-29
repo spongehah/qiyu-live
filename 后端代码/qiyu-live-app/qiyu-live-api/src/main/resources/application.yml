@@ -1,0 +1,6 @@
+dubbo:
+  application:
+    name: qiyu-live-api
+    qos-enable: false
+  registry:
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu

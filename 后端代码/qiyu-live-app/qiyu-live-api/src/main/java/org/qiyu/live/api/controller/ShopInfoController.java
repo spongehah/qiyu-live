@@ -48,12 +48,12 @@ public class ShopInfoController {
     public WebResponseVO getCarInfo(ShopCarReqVO reqVO) {
         return WebResponseVO.success(shopInfoService.getCarInfo(reqVO));
     }
-    
+
     @PostMapping("/clearCar")
     public WebResponseVO clearCar(ShopCarReqVO reqVO) {
         return WebResponseVO.success(shopInfoService.clearShopCar(reqVO));
     }
-    
+
     // 购物车以及塞满了，下边的逻辑是怎样的？
     // 预下单，（手机产品100台，库存的预锁定操作）
     // 如果下单成功（库存就正常扣减了）
@@ -62,12 +62,12 @@ public class ShopInfoController {
     public WebResponseVO prepareOrder(PrepareOrderVO prepareOrderVO) {
         return WebResponseVO.success(shopInfoService.prepareOrder(prepareOrderVO));
     }
-    
+
     @PostMapping("/prepareStock")
     public WebResponseVO prepareStock(Long anchorId) {
         return WebResponseVO.success(shopInfoService.prepareStock(anchorId));
     }
-    
+
     @PostMapping("/payNow")
     public WebResponseVO payNow(PrepareOrderVO prepareOrderVO) {
         return WebResponseVO.success(shopInfoService.payNow(prepareOrderVO));

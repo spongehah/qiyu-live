@@ -121,7 +121,7 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         LambdaQueryWrapper<LivingRoomPO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(LivingRoomPO::getAnchorId, anchorId);
         queryWrapper.eq(LivingRoomPO::getStatus, CommonStatusEnum.VALID_STATUS.getCode());
-        queryWrapper.last("limit 1");
+        queryWrapper.last("order by id desc limit 1");
         return ConvertBeanUtils.convert(livingRoomMapper.selectOne(queryWrapper), LivingRoomRespDTO.class);
     }
 

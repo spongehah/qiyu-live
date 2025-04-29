@@ -61,7 +61,7 @@ public class RedPacketConfigServiceImpl implements IRedPacketConfigService {
     public RedPacketConfigPO queryByAnchorId(Long anchorId) {
         LambdaQueryWrapper<RedPacketConfigPO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(RedPacketConfigPO::getAnchorId, anchorId);
-        queryWrapper.eq(RedPacketConfigPO::getStatus, RedPacketStatusEnum.WAIT.getCode());
+        queryWrapper.ne(RedPacketConfigPO::getStatus, RedPacketStatusEnum.IS_SEND.getCode());
         queryWrapper.orderByDesc(RedPacketConfigPO::getCreateTime);
         queryWrapper.last("limit 1");
         return redPacketConfigMapper.selectOne(queryWrapper);
@@ -138,7 +138,9 @@ public class RedPacketConfigServiceImpl implements IRedPacketConfigService {
         LivingRoomReqDTO livingRoomReqDTO = new LivingRoomReqDTO();
         livingRoomReqDTO.setRoomId(reqDTO.getRoomId());
         livingRoomReqDTO.setAppId(AppIdEnum.QIYU_LIVE_BIZ.getCode());
+        System.out.println("请求用户列表参数：" + livingRoomReqDTO);
         List<Long> userIdList = livingRoomRpc.queryUserIdsByRoomId(livingRoomReqDTO);
+        System.out.println("红包通知列表：" + userIdList);
         if (CollectionUtils.isEmpty(userIdList)) return false;
         this.batchSendImMsg(userIdList, ImMsgBizCodeEnum.RED_PACKET_CONFIG.getCode(), jsonObject);
         // 更改红包雨配置的状态为已发送

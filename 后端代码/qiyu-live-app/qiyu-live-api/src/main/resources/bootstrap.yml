@@ -6,18 +6,16 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
-      config:
-        import-check:
-          enabled: false
-        # 当前服务启动后去nacos中读取配置文件的后缀
-        file-extension: yml
-        # 读取配置的nacos地址
-        server-addr: nacos.server:8848
-        # 读取配置的nacos的名空间
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
-        group: DEFAULT_GROUP
-  config:
-    import:
-      - optional:nacos:${spring.application.name}.yml
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
+
+  # Kafka配置，前缀是spring
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer

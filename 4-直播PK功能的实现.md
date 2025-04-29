@@ -60,10 +60,30 @@ public class GiftReqVO {
 
 ```java
 //gift-interfacce模块中
+package org.qiyu.live.gift.constants;
+
 public enum SendGiftTypeEnum {
     
     DEFAULT_SEND_GIFT(0, "直播间默认送礼物"),
     PK_SEND_GIFT(1, "直播间PK送礼物");
+
+    int code;
+    String desc;
+
+    SendGiftTypeEnum(int code, String desc) {
+        this.code = code;
+        this.desc = desc;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getDesc() {
+        return desc;
+    }
+}
+
 ```
 
 ```java
@@ -223,6 +243,8 @@ CompletableFuture<SendResult<String, String>> sendResult = kafkaTemplate.send(
 private static final long PK_MIN_NUM = 0;
 private static final long PK_MAX_NUM = 1000;
 ```
+
+SendGiftConsumer：
 
 ```java
 // PK送礼，要求全体可见

@@ -1,7 +1,6 @@
 package org.qiyu.live.api.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import io.micrometer.common.util.StringUtils;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.qiyu.live.api.error.ApiErrorEnum;
 import org.qiyu.live.api.service.ILivingRoomService;
@@ -30,6 +29,7 @@ import org.qiyu.live.web.starter.error.BizBaseErrorEnum;
 import org.qiyu.live.web.starter.error.ErrorAssert;
 import org.qiyu.live.web.starter.error.QiyuErrorException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -76,10 +76,11 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         LivingRoomInitVO respVO = new LivingRoomInitVO();
         respVO.setAnchorNickName(anchor.getNickName());
         respVO.setWatcherNickName(watcher.getNickName());
+        respVO.setNickName(watcher.getNickName());
         respVO.setUserId(userId);
         respVO.setPkObjId(livingRoomRpc.queryOnlinePkUserId(roomId));
-        respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "../svga/img/爱心.png" : anchor.getAvatar());
-        respVO.setWatcherAvatar(watcher.getAvatar());
+        respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : anchor.getAvatar());
+        respVO.setWatcherAvatar(StringUtils.isEmpty(watcher.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : watcher.getAvatar());
         respVO.setDefaultBgImg("https://picst.sunbangyan.cn/2023/08/29/waxzj0.png");
         if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
             // 直播间不存在，设置roomId为-1

@@ -28,7 +28,7 @@ public class NacosDriverURLProvider implements ShardingSphereDriverURLProvider {
     /**
      * 从url中获取到nacos的连接配置信息
      *
-     * @param url （jdbc:shardingsphere:nacos:qiyu.nacos.com:8848:qiyu-live-user-shardingjdbc.yaml?username=qiyu&&password=qiyu&&namespaceb8098488-3fd3-4283-a68c-2878fdf425ab）
+     * @param url （jdbc:shardingsphere:nacos:qiyu.nacos.com:8848:qiyu-live-user-shardingjdbc.yaml?username=qiyu&&password=qiyu&&namespace1bc15ccf-f070-482e-8325-c3c46e427aaf）
      * @return
      */
     @Override
@@ -36,7 +36,7 @@ public class NacosDriverURLProvider implements ShardingSphereDriverURLProvider {
         if (StringUtils.isEmpty(url)) {
             return null;
         }
-        //得到例如：qiyu.nacos.com:8848:qiyu-live-user-shardingjdbc.yaml?username=qiyu&&password=qiyu&&namespace=b8098488-3fd3-4283-a68c-2878fdf425ab 格式的url
+        //得到例如：qiyu.nacos.com:8848:qiyu-live-user-shardingjdbc.yaml?username=qiyu&&password=qiyu&&namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf 格式的url
         String nacosUrl = url.substring(url.lastIndexOf(NACOS_TYPE) + NACOS_TYPE.length());
         /**
          * 得到三个字符串，分别是：
@@ -49,7 +49,7 @@ public class NacosDriverURLProvider implements ShardingSphereDriverURLProvider {
         /**
          * 得到两个字符串
          * qiyu-live-user-shardingjdbc.yaml
-         * username=qiyu&&password=qiyu&&namespace=b8098488-3fd3-4283-a68c-2878fdf425ab
+         * username=qiyu&&password=qiyu&&namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf
          */
         String nacosFileProp[] = nacosFileStr.split("\\?");
         String dataId = nacosFileProp[0];

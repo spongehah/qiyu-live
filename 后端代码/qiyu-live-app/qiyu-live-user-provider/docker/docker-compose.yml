@@ -14,8 +14,8 @@ services:
       - DUBBO_PORT_TO_BIND=9091
       - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
     extra_hosts:
-      - 'nacos.server:192.168.111.1'
-      - 'hahhome:47.120.12.106'
+      - 'localhost:192.168.111.1'
+      - 'localhost:47.120.12.106'
 
   qiyu-live-user-provider-docker-2:
     container_name: qiyu-live-user-provider-docker-2
@@ -31,5 +31,5 @@ services:
       - DUBBO_PORT_TO_BIND=9092
       - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
     extra_hosts:
-      - 'nacos.server:192.168.111.1'
-      - 'hahhome:47.120.12.106'
+      - 'localhost:192.168.111.1'
+      - 'localhost:47.120.12.106'

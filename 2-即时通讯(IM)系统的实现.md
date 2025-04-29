@@ -545,12 +545,6 @@ public enum ImMsgCodeEnum {
 **新建qiyu-live-im-core-server：**
 
 ```xml
-<properties>
-    <!--完整的版本控制到用户中台的2.5节的父项目pom文件中查看-->
-    <alibaba-fastjson.version>2.0.10</alibaba-fastjson.version>
-	<netty-all.version>4.1.18.Final</netty-all.version>
-</properties>
-
 <dependencies>
     <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -643,7 +637,7 @@ public enum ImMsgCodeEnum {
 package org.qiyu.live.im.core.server.common;
 
 import lombok.Data;
-import org.qiyu.live.im.interfaces.ImConstants;
+import org.qiyu.live.im.ImConstants;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -709,7 +703,7 @@ package org.qiyu.live.im.core.server.common;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
-import org.qiyu.live.im.interfaces.ImConstants;
+import org.qiyu.live.im.ImConstants;
 
 import java.util.List;
 
@@ -905,7 +899,7 @@ import io.netty.channel.ChannelHandlerContext;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.handler.ImHandlerFactory;
 import org.qiyu.live.im.core.server.handler.SimpleHandler;
-import org.qiyu.live.im.interfaces.ImMsgCodeEnum;
+import org.qiyu.live.im.ImMsgCodeEnum;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -1084,7 +1078,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.qiyu.live.im.core.server.common.ImMsg;
 import org.qiyu.live.im.core.server.common.ImMsgDecoder;
 import org.qiyu.live.im.core.server.common.ImMsgEncoder;
-import org.qiyu.live.im.interfaces.ImMsgCodeEnum;
+import org.qiyu.live.im.ImMsgCodeEnum;
 
 public class ImClientApplication {
     
@@ -1131,18 +1125,37 @@ public class ImClientApplication {
 然后将port使用@Value注解从Nacos读取配置，删除get、set方法，将代码中的getPort()替换为port，将代码中的new ImServerCoreHandler()替换为注入的imServerCoreHandler，删除startApplication()方法的参数，删除main方法，添加afterPropertiesSet初始化方法
 
 ```java
+package org.qiyu.live.im.core.server.starter;
+
+import io.netty.channel.ChannelInitializer;
+import jakarta.annotation.Resource;
+import org.qiyu.live.im.core.server.common.ImMsgDecoder;
+import org.qiyu.live.im.core.server.common.ImMsgEncoder;
+import org.qiyu.live.im.core.server.handler.ImServerCoreHandler;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.context.annotation.Configuration;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Configuration
 @RefreshScope
 public class NettyImServerStarter implements InitializingBean {
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger(NettyImServerStarter.class);
-    
+
     //要监听的端口
     @Value("${qiyu.im.port}")
     private int port;
     @Resource
     private ImServerCoreHandler imServerCoreHandler;
-    
+
     //基于Netty去启动一个java进程，绑定监听的端口
     public void startApplication() throws InterruptedException {
         //处理accept事件
@@ -1198,15 +1211,21 @@ public class NettyImServerStarter implements InitializingBean {
 ImServerCoreHandler将imHandlerFactory替换为Spring注入：
 
 ```java
+package org.qiyu.live.im.core.server.handler;
+
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.impl.ImHandlerFactoryImpl;
+import org.springframework.stereotype.Component;
+
 @Component
 @ChannelHandler.Sharable
 public class ImServerCoreHandler extends SimpleChannelInboundHandler {
     
-    @Resource
-    private ImHandlerFactory imHandlerFactory;
-    @Resource
-    private LogoutMsgHandler logoutMsgHandler;
-    
+    private ImHandlerFactory imHandlerFactory = new ImHandlerFactoryImpl();
+
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
         if(!(msg instanceof ImMsg)) {
@@ -1214,38 +1233,35 @@ public class ImServerCoreHandler extends SimpleChannelInboundHandler {
         }
         ImMsg imMsg = (ImMsg) msg;
         imHandlerFactory.doMsgHandler(channelHandlerContext, imMsg);
-    }
-
-    /**
-     * 客户端正常或意外掉线，都会触发这里
-     * @param ctx
-     * @throws Exception
-     */
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        Long userId = ctx.attr(ImContextAttr.USER_ID).get();
-        ChannelHandlerContextCache.remove(userId);
-    }
+    }   
 }
 ```
 
 ImHandlerFactoryImpl将自己实现的单例模式替换为由Spring进行管理的单例：
 
 ```java
+package org.qiyu.live.im.core.server.handler.impl;
+
+import io.netty.channel.ChannelHandlerContext;
+import jakarta.annotation.Resource;
+import org.qiyu.live.im.constants.ImMsgCodeEnum;
+import org.qiyu.live.im.core.server.common.ImMsg;
+import org.qiyu.live.im.core.server.handler.ImHandlerFactory;
+import org.qiyu.live.im.core.server.handler.SimpleHandler;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.ApplicationContext;
+import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
+
 @Component
 public class ImHandlerFactoryImpl implements ImHandlerFactory, InitializingBean {
-    
+
     private static Map<Integer, SimpleHandler> simpleHandlerMap = new HashMap<>();
+
     @Resource
     private ApplicationContext applicationContext;
-    @Override
-    public void doMsgHandler(ChannelHandlerContext ctx, ImMsg imMsg) {
-        SimpleHandler simpleHandler = simpleHandlerMap.get(imMsg.getCode());
-        if(simpleHandler == null) {
-            throw new IllegalArgumentException("msg code is error, code is :" + imMsg.getCode());
-        }
-        simpleHandler.handler(ctx, imMsg);
-    }
 
     @Override
     public void afterPropertiesSet() throws Exception {
@@ -1257,6 +1273,15 @@ public class ImHandlerFactoryImpl implements ImHandlerFactory, InitializingBean 
         simpleHandlerMap.put(ImMsgCodeEnum.IM_LOGOUT_MSG.getCode(), applicationContext.getBean(LogoutMsgHandler.class));
         simpleHandlerMap.put(ImMsgCodeEnum.IM_BIZ_MSG.getCode(), applicationContext.getBean(BizImMsgHandler.class));
         simpleHandlerMap.put(ImMsgCodeEnum.IM_HEARTBEAT_MSG.getCode(), applicationContext.getBean(HeartBeatImMsgHandler.class));
+    }
+
+    @Override
+    public void doMsgHandler(ChannelHandlerContext ctx, ImMsg imMsg) {
+        SimpleHandler simpleHandler = simpleHandlerMap.get(imMsg.getCode());
+        if (simpleHandler == null) {
+            throw new IllegalArgumentException("msg code is error, code is :" + imMsg.getCode());
+        }
+        simpleHandler.handler(ctx, imMsg);
     }
 }
 ```
@@ -1301,17 +1326,17 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
       config:
         import-check:
           enabled: false
         # 当前服务启动后去nacos中读取配置文件的后缀
         file-extension: yml
         # 读取配置的nacos地址
-        server-addr: nacos.server:8848
+        server-addr: localhost:8848
         # 读取配置的nacos的名空间
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
         group: DEFAULT_GROUP
   config:
     import:
@@ -1327,7 +1352,7 @@ spring:
   data:
     redis:
       port: 6379
-      host: hahhome
+      host: localhost
       password: 123456
       lettuce:
         pool:
@@ -1340,7 +1365,7 @@ dubbo:
     name: ${spring.application.name}
     qos-enable: false
   registry:
-    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu
 
 qiyu:
   im:
@@ -1435,7 +1460,7 @@ public interface ImTokenRpc {
 **qiyu-live-framework-redis-starter：**
 
 ```java
-package org.idea.qiyu.live.framework.redis.starter.key;
+package org.qiyu.live.framework.redis.starter.key;
 
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -1519,17 +1544,17 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
       config:
         import-check:
           enabled: false
         # 当前服务启动后去nacos中读取配置文件的后缀
         file-extension: yml
         # 读取配置的nacos地址
-        server-addr: nacos.server:8848
+        server-addr: localhost:8848
         # 读取配置的nacos的名空间
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
         group: DEFAULT_GROUP
   config:
     import:
@@ -1545,7 +1570,7 @@ spring:
   data:
     redis:
       port: 6379
-      host: hahhome
+      host: localhost
       password: 123456
       lettuce:
         pool:
@@ -1557,7 +1582,7 @@ dubbo:
   application:
     name: ${spring.application.name}
   registry:
-    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu
   protocol:
     name: dubbo
     port: 9093
@@ -1590,7 +1615,7 @@ public interface ImTokenService {
 package org.qiyu.live.im.provider.service.impl;
 
 import jakarta.annotation.Resource;
-import org.idea.qiyu.live.framework.redis.starter.key.ImProviderCacheKeyBuilder;
+import org.qiyu.live.framework.redis.starter.key.ImProviderCacheKeyBuilder;
 import org.qiyu.live.im.provider.service.ImTokenService;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -2040,7 +2065,7 @@ public class ImClientApplication {
 **qiyu-live-framework-redis-starter：**
 
 ```java
-package org.idea.qiyu.live.framework.redis.starter.key;
+package org.qiyu.live.framework.redis.starter.key;
 
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
@@ -2099,7 +2124,7 @@ package org.qiyu.live.im.core.server.handler.impl;
 import com.alibaba.fastjson.JSON;
 import io.netty.channel.ChannelHandlerContext;
 import jakarta.annotation.Resource;
-import org.idea.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
+import org.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
 import org.qiyu.live.im.constants.ImConstants;
 import org.qiyu.live.im.constants.ImMsgCodeEnum;
 import org.qiyu.live.im.core.server.common.ImContextUtils;
@@ -2172,6 +2197,11 @@ public class HeartBeatImMsgHandler implements SimpleHandler {
 在LogoutMsgHandler最后添加：
 
 ```java
+@Resource
+private RedisTemplate<String, Object> redisTemplate;
+@Resource
+private ImCoreServerProviderCacheKeyBuilder cacheKeyBuilder;
+
 // 删除心跳包存活缓存
 stringRedisTemplate.delete(cacheKeyBuilder.buildImLoginTokenKey(userId, appId));
 ```
@@ -2291,7 +2321,7 @@ public class ImCoreServerProviderTopicNames {
 ```yaml
   # Kafka配置，前缀是spring
   kafka:
-    bootstrap-servers: hahhome:9092
+    bootstrap-servers: localhost:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -2492,7 +2522,7 @@ dubbo:
     name: ${spring.application.name}
     qos-enable: false
   registry:
-    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu
   protocol:
     name: dubbo
     port: 9095
@@ -2620,17 +2650,17 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
       config:
         import-check:
           enabled: false
         # 当前服务启动后去nacos中读取配置文件的后缀
         file-extension: yml
         # 读取配置的nacos地址
-        server-addr: nacos.server:8848
+        server-addr: localhost:8848
         # 读取配置的nacos的名空间
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
         group: DEFAULT_GROUP
   config:
     import:
@@ -2652,7 +2682,7 @@ spring:
   data:
     redis:
       port: 6379
-      host: hahhome
+      host: localhost
       password: 123456
       lettuce:
         pool:
@@ -2664,10 +2694,10 @@ dubbo:
   application:
     name: ${spring.application.name}
   registry:
-    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu
   protocol:
     name: dubbo
-    port: 9094
+    port: 9096
     threadpool: fixed
     dispatcher: execution
     threads: 500
@@ -2731,7 +2761,7 @@ public class ImRouterServiceImpl implements ImRouterService {
     @Override
     public boolean sendMsg(ImMsgBody imMsgBody) {
         //现在是测试代码，具体代码在下一节实现
-        String objectImServerIp = "192.168.101.104:9095";//core-server的ip地址+routerHandlerRpc调用的端口
+        String objectImServerIp = "192.168.31.222:9095";//core-server的ip地址+routerHandlerRpc调用的端口
         RpcContext.getContext().set("ip", objectImServerIp);
         routerHandlerRpc.sendMsg(userId, msgJson);
         return true;
@@ -2855,9 +2885,12 @@ public class ImRouterProviderApplication implements CommandLineRunner {
 然后启动im-core-server时要在VM Options中添加以下注释中的参数
 
 ```java
+@Resource
+private Environment environment;
+
 //将启动时im服务器的ip和端口记录下来，用于Router模块转发时使用
 //添加启动参数：
-// -DDUBBO_IP_TO_REGISTRY=192.168.101.104  (启动服务的机器的ip地址)
+// -DDUBBO_IP_TO_REGISTRY=192.168.31.222  (启动服务的机器的ip地址)
 // -DDUBBO_PORT_TO_REGISTRY=9095
 //注意VM参数添加的是-D参数，前面是两个D，后面获取property时只有一个D
 try {
@@ -2875,6 +2908,48 @@ try {
 }
 ```
 
+```java 
+package org.qiyu.live.im.core.server.common;
+
+import io.netty.channel.ChannelHandlerContext;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 封装ChannelHandlerContext的缓存，将已建立连接的ChannelHandlerContext放到这里
+ */
+public class ChannelHandlerContextCache {
+
+    /**
+     * 当前IM服务启动的时候，在Nacos对外暴露的ip和端口
+     */
+    private static String SERVER_IP_ADDRESS = "";
+    private static Map<Long, ChannelHandlerContext> channelHandlerContextMap = new HashMap<>();
+
+    public static ChannelHandlerContext get(Long userId) {
+        return channelHandlerContextMap.get(userId);
+    }
+
+    public static void put(Long userId, ChannelHandlerContext channelHandlerContext) {
+        channelHandlerContextMap.put(userId, channelHandlerContext);
+    }
+
+    public static void remove(Long userId) {
+        channelHandlerContextMap.remove(userId);
+    }
+
+    public static void setServerIpAddress(String serverIpAddress) {
+        ChannelHandlerContextCache.SERVER_IP_ADDRESS = serverIpAddress;
+    }
+
+    public static String getServerIpAddress() {
+        return SERVER_IP_ADDRESS;
+    }
+
+}
+```
+
 在LoginMsgHandler中，在【将im消息回写给客户端】的代码段下面添加上以下代码：用于将该userId连接的im-server保存到Redis，供Router转发时取出使用
 
 ```java
@@ -2882,6 +2957,15 @@ try {
 stringRedisTemplate.opsForValue().set(ImCoreServerConstants.IM_BIND_IP_KEY + appId + ":" + userId,
         ChannelHandlerContextCache.getServerIpAddress(),
         2 * ImConstants.DEFAULT_HEART_BEAT_GAP, TimeUnit.SECONDS);
+```
+
+```
+package org.qiyu.live.im.core.server.interfaces.constants;
+
+public class ImCoreServerConstants {
+    
+    public static final String IM_BIND_IP_KEY = "qiyu-live-im-core-server:bindIp:";
+}
 ```
 
 在LogoutMsgHandler中，在【客户端短线的时候发送短线消息包】的代码段下面添加上以下代码：删除对应缓存
@@ -3517,8 +3601,8 @@ package org.qiyu.live.im.core.server.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import jakarta.annotation.Resource;
-import org.idea.qiyu.live.framework.redis.starter.id.RedisSeqIdHelper;
-import org.idea.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
+import org.qiyu.live.framework.redis.starter.id.RedisSeqIdHelper;
+import org.qiyu.live.framework.redis.starter.key.ImCoreServerProviderCacheKeyBuilder;
 import org.qiyu.live.common.interfaces.topic.ImCoreServerProviderTopicNames;
 import org.qiyu.live.im.core.server.service.IMsgAckCheckService;
 import org.qiyu.live.im.dto.ImMsgBody;
@@ -3757,6 +3841,23 @@ public class ImAckConsumer {
 }
 ```
 
+nacos中im.core.server的配置文件：
+
+```yaml
+  # Kafka配置，前缀是spring
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual # 手动确认模式
+```
+
 
 
 **测试：**
@@ -3785,6 +3886,22 @@ public class ClientHandler extends ChannelInboundHandlerAdapter {
 ```
 
 测试启动顺序：ImProviderApplication --> ImCoreServerApplication -->  ImRouterProviderApplication --> MsgProviderApplication --> ImClientApplication
+
+若有fastjson2报错，将pom中的fastjson依赖全部排除fastjson2:
+
+```xml
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>fastjson</artifactId>
+    <version>${alibaba-fastjson.version}</version>
+    <exclusions>
+        <exclusion>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+```
 
 在ImClientApplication输入两次100001与自己通话
 
@@ -4060,17 +4177,17 @@ spring:
       username: qiyu
       password: qiyu
       discovery:
-        server-addr: nacos.server:8848
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        server-addr: localhost:8848
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
       config:
         import-check:
           enabled: false
         # 当前服务启动后去nacos中读取配置文件的后缀
         file-extension: yml
         # 读取配置的nacos地址
-        server-addr: nacos.server:8848
+        server-addr: localhost:8848
         # 读取配置的nacos的名空间
-        namespace: b8098488-3fd3-4283-a68c-2878fdf425ab
+        namespace: 1bc15ccf-f070-482e-8325-c3c46e427aaf
         group: DEFAULT_GROUP
   config:
     import:
@@ -4089,16 +4206,16 @@ spring:
       maximum-pool-size: 200
     driver-class-name: com.mysql.cj.jdbc.Driver
     #访问主库
-    url: jdbc:mysql://localhost:3306/qiyu_live_user?useUnicode=true&characterEncoding=utf8
+    url: jdbc:mysql://localhost:8808/qiyu_live_user?useUnicode=true&characterEncoding=utf8
     username: root
-    password: 123456
+    password: root
 
 
 dubbo:
   application:
     name: ${spring.application.name}
   registry:
-    address: nacos://nacos.server:8848?namespace=b8098488-3fd3-4283-a68c-2878fdf425ab&&username=qiyu&&password=qiyu
+    address: nacos://localhost:8848?namespace=1bc15ccf-f070-482e-8325-c3c46e427aaf&&username=qiyu&&password=qiyu
   protocol:
     name: dubbo
     port: 9098
@@ -4188,7 +4305,7 @@ public interface LivingRoomRecordMapper extends BaseMapper<LivingRoomRecordPO> {
 ```java
 @DubboService
 public class LivingRomRpcImpl implements ILivingRoomRpc {
-    
+
     @Resource
     private ILivingRoomService livingRoomService;
 
@@ -4196,7 +4313,12 @@ public class LivingRomRpcImpl implements ILivingRoomRpc {
     public Integer startLivingRoom(LivingRoomReqDTO livingRoomReqDTO) {
         return livingRoomService.startLivingRoom(livingRoomReqDTO);
     }
-    
+
+    @Override
+    public boolean closeLiving(LivingRoomReqDTO livingRoomReqDTO) {
+        return livingRoomService.closeLiving(livingRoomReqDTO);
+    }
+
     @Override
     public LivingRoomRespDTO queryByRoomId(Integer roomId) {
         return livingRoomService.queryByRoomId(roomId);
@@ -4403,6 +4525,7 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
         if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
             respVO.setAnchor(false);
         }else {
+            respVO.setRoomId(respDTO.getId());
             respVO.setAnchor(respDTO.getAnchorId().equals(userId));
         }
         return respVO;
@@ -4434,7 +4557,7 @@ public class PageWrapper<T> implements Serializable {
 
     public List<T> getList() {
         return list;
-    }
+    } 
 
     public void setList(List<T> list) {
         this.list = list;
@@ -4589,29 +4712,6 @@ public class MyBatisPageConfig {
 rpc服务层：
 
 ```java
-@Configuration
-public class MyBatisPageConfig {
-
-    @Bean
-    public PaginationInnerInterceptor paginationInnerInterceptor() {
-        PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor();
-        paginationInnerInterceptor.setMaxLimit(1000L);
-        paginationInnerInterceptor.setDbType(DbType.MYSQL);
-        // 开启count 的join优化，只针对left join
-        paginationInnerInterceptor.setOptimizeJoin(true);
-        return paginationInnerInterceptor;
-    }
-
-    @Bean
-    public MybatisPlusInterceptor mybatisPlusInterceptor() {
-        MybatisPlusInterceptor mybatisPlusInterceptor = new MybatisPlusInterceptor();
-        mybatisPlusInterceptor.setInterceptors(Collections.singletonList(paginationInnerInterceptor()));
-        return mybatisPlusInterceptor;
-    }
-}
-```
-
-```java
 ILivingRoomRpc
 /**
  * 直播间列表的分页查询
@@ -4636,7 +4736,7 @@ ILivingRoomService
 /**
  * 查询直播间列表（分页）
  */
-LivingRoomPageRespVO list(LivingRoomReqVO livingRoomReqVO);
+PageWrapper<LivingRoomRespDTO> list(LivingRoomReqDTO livingRoomReqDTO);
 ```
 
 ```java
@@ -4672,6 +4772,7 @@ public class LivingRoomServiceImpl implements ILivingRoomService {
 public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
     LivingRoomRespDTO respDTO = livingRoomRpc.queryByRoomId(roomId);
     LivingRoomInitVO respVO = new LivingRoomInitVO();
+    respVO.setUserId(userId);
     if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
         //直播间不存在，设置roomId为-1
         respVO.setRoomId(-1);
@@ -4741,7 +4842,7 @@ nacos配置文件添加redis配置：
 ```yaml
   data:
     redis:
-      host: h
+      host: localhost
       port: 6379
       password: 123456
       lettuce:
@@ -4924,6 +5025,33 @@ public class RefreshLivingRoomListJob implements InitializingBean {
         //直接修改重命名这个list，不要直接对原来的list进行修改，减少阻塞的影响
         redisTemplate.rename(tempListName, cacheKey);
         redisTemplate.unlink(tempListName);
+    }
+}
+```
+
+```java
+package org.qiyu.live.living.interfaces.constants;
+
+
+public enum LivingRoomTypeEnum {
+
+    DEFAULT_LIVING_ROOM(1,"普通直播间"),
+    PK_LIVING_ROOM(2,"pk直播间");
+
+    LivingRoomTypeEnum(int code, String desc) {
+        this.code = code;
+        this.desc = desc;
+    }
+
+    Integer code;
+    String desc;
+
+    public Integer getCode() {
+        return code;
+    }
+
+    public String getDesc() {
+        return desc;
     }
 }
 ```
@@ -5116,11 +5244,11 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
 > ```java
 > 	...
 > 	// 从RPC获取的userId和传递过来的userId相等，则没出现差错，允许建立连接
->     if (userId != null && userId.equals(userIdFromMsg)) {
->         loginSuccessHandler(ctx, userId, appId);
->         return;
->     }
->     ...
+>  if (userId != null && userId.equals(userIdFromMsg)) {
+>      loginSuccessHandler(ctx, userId, appId);
+>      return;
+>  }
+>  ...
 > }
 > 
 > /**
@@ -5146,10 +5274,55 @@ public class WsSharkHandler extends ChannelInboundHandlerAdapter {
 >     ctx.writeAndFlush(respMsg);
 > }
 > ```
+>
+> logoutHandler:
+>
+> ```java
+>  public void logoutHandler(ChannelHandlerContext ctx, Long userId, Integer appId) {
+>         //将IM消息回写给客户端
+>         ImMsgBody respBody = new ImMsgBody();
+>         respBody.setUserId(userId);
+>         respBody.setAppId(appId);
+>         respBody.setData("true");
+>         ctx.writeAndFlush(ImMsg.build(ImMsgCodeEnum.IM_LOGOUT_MSG.getCode(), JSON.toJSONString(respBody)));
+>         LOGGER.info("[LogoutMsgHandler] logout success, userId is {}, appId is {}", userId, appId);
+>         handlerLogout(userId, appId);
+>         ImContextUtils.removeUserId(ctx);
+>         ImContextUtils.removeAppId(ctx);
+>         ctx.close();
+>     }
+> ```
+>
+> 
 
 5 编写WebSocket协议的im服务器启动类：
 
 ```java
+package org.qiyu.live.im.core.server.starter;
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.stream.ChunkedWriteHandler;
+import jakarta.annotation.Resource;
+import org.qiyu.live.im.core.server.common.ChannelHandlerContextCache;
+import org.qiyu.live.im.core.server.common.WebsocketEncoder;
+import org.qiyu.live.im.core.server.handler.ws.WsImServerCoreHandler;
+import org.qiyu.live.im.core.server.handler.ws.WsSharkHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.util.StringUtils;
+
 @Configuration
 @RefreshScope
 public class WsNettyImServerStarter implements InitializingBean {
@@ -5537,7 +5710,7 @@ nacos配置文件添加：
 ```yaml
   # Kafka配置
   kafka:
-    bootstrap-servers: hahhome:9092
+    bootstrap-servers: localhost:9092
     # 指定listener的并发数
     listener:
       concurrency: 3
@@ -5930,8 +6103,10 @@ public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
     LivingRoomInitVO respVO = new LivingRoomInitVO();
     respVO.setAnchorNickName(anchor.getNickName());
     respVO.setWatcherNickName(watcher.getNickName());
+    respVO.setNickName(watcher.getNickName());
     respVO.setUserId(userId);
     respVO.setAvatar(StringUtils.isEmpty(anchor.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : anchor.getAvatar());
+    respVO.setWatcherAvatar(StringUtils.isEmpty(watcher.getAvatar()) ? "https://s1.ax1x.com/2022/12/18/zb6q6f.png" : watcher.getAvatar());
     respVO.setWatcherAvatar(watcher.getAvatar());
     if (respDTO == null || respDTO.getAnchorId() == null || userId == null) {
         //直播间不存在，设置roomId为-1
@@ -5941,7 +6116,7 @@ public LivingRoomInitVO anchorConfig(Long userId, Integer roomId) {
         respVO.setAnchorId(respDTO.getAnchorId());
         respVO.setAnchor(respDTO.getAnchorId().equals(userId));
     }
-    respVO.setDefaultBgImg("https://picst.sunbangyan.cn/2023/08/29/waxzj0.png");
+    respVO.setDefaultBgImg("http://www.news.cn/photo/20250425/e2f1fb2690d74d099f6b5478be683fcc/ad07d300366b41b29df095f5f8946217.jpg");
     return respVO;
 }
 ```

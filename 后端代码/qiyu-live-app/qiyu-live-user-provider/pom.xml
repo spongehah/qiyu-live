@@ -15,7 +15,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
-        <arthus.zip.address>D:\浏览器下载\</arthus.zip.address>
+        <arthus.zip.address>~/Download/</arthus.zip.address>
     </properties>
 
     <dependencies>

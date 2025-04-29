@@ -12,7 +12,7 @@ services:
       - server.port=8081
       - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
     extra_hosts:
-      - 'nacos.server:192.168.111.1'
+      - 'localhost:192.168.111.1'
   qiyu-live-api-docker-2:
     container_name: qiyu-live-api-docker-2
     image: 'qiyu-live-api-docker:1.0.4'
@@ -25,4 +25,4 @@ services:
       - server.port=8082
       - JAVA_OPTS=-XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=128m -Xms512m -Xmx512m -Xmn128m -Xss256k
     extra_hosts:
-      - 'nacos.server:192.168.111.1'
+      - 'localhost:192.168.111.1'
