@@ -99,10 +99,10 @@ public class SmsServiceImpl implements ISmsService {
             // 请求端口
             String serverPort = "8883";
             // 主账号,登陆云通讯网站后,可在控制台首页看到开发者主账号ACCOUNT SID和主账号令牌AUTH TOKEN
-            String accountSId = "2c94811c8cd4da0a018d938a40291c0a";
-            String accountToken = "34e714f93f32438d90301ed6521c09c5";
+            String accountSId = "xxx";
+            String accountToken = "xxx";
             // 请使用管理控制台中已创建应用的APPID
-            String appId = "2c94811c8cd4da0a018d938a41a91c11";
+            String appId = "xxx";
             CCPRestSmsSDK sdk = new CCPRestSmsSDK();
             sdk.init(serverIp, serverPort);
             sdk.setAccount(accountSId, accountToken);

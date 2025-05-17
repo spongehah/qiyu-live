@@ -23,9 +23,11 @@ public class ImRouterClusterInvoker<T> extends AbstractClusterInvoker<T> {
         }
         //获取到指定的rpc服务提供者的所有地址信息
         List<Invoker<T>> invokers = list(invocation);
+        System.out.println("invoker ip: " + ip + "len(invoker): " + invokers.size());
         Invoker<T> matchInvoker = invokers.stream().filter(invoker -> {
             //拿到我们服务提供者的暴露地址（ip:端口 的格式）
             String serverIp = invoker.getUrl().getHost() + ":" + invoker.getUrl().getPort();
+            System.out.println("invoker serverIp: " + serverIp);
             return serverIp.equals(ip);
         }).findFirst().orElse(null);
         if (matchInvoker == null) {

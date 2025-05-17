@@ -62,6 +62,7 @@ public class ImRouterServiceImpl implements ImRouterService {
             List<Long> currentUserIdList = userIdMap.getOrDefault(currentIp, new ArrayList<Long>());
             currentUserIdList.add(userId);
             userIdMap.put(currentIp, currentUserIdList);
+            System.out.println("batchSendMsg ip: " + currentIp);
         });
         //根据注册IP对ImMsgBody进行分组
         //将连接到同一台i地址的ImMsgBody组装到一个List中，进行统一发送

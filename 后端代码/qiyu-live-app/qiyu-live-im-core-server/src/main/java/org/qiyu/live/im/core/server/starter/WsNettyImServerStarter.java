@@ -73,10 +73,12 @@ public class WsNettyImServerStarter implements InitializingBean {
         //获取im的服务注册ip和暴露端口
         String registryIp = environment.getProperty("DUBBO_IP_TO_REGISTRY");
         String registryPort = environment.getProperty("DUBBO_PORT_TO_REGISTRY");
+        System.out.println("registryIp111: " + registryIp);
         if (StringUtils.isEmpty(registryPort) || StringUtils.isEmpty(registryIp)) {
             throw new IllegalArgumentException("启动参数中的注册端口和注册ip不能为空");
         }
         ChannelHandlerContextCache.setServerIpAddress(registryIp + ":" + registryPort);
+        System.out.println("registryIp222: " + ChannelHandlerContextCache.getServerIpAddress());
         ChannelFuture channelFuture = bootstrap.bind(port).sync();
         LOGGER.info("服务启动成功，监听端口为{}", port);
         //这里会阻塞掉主线程，实现服务长期开启的效果
